@@ -1,0 +1,14 @@
+node_modules
+.next
+.env
+.env.local
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+playwright-report
+coverage
+prisma/migrations
+.DS_Store
+
+# prisma generated
+prisma/generated
