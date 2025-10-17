@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { perenualTargets } from "../data/perenual-targets";
+import { persistPlantImage } from "./utils/image-store";
 
 type PerenualListItem = {
   id: number;
@@ -164,6 +165,7 @@ function toPlantPayload(
   detail: PerenualPlantDetail,
   category: "vegetable" | "herb" | "fruit",
   fallbackName: string,
+  imageLocalPath: string | null,
 ): Prisma.PlantUncheckedCreateInput {
   const sunlightList = normaliseArray(detail.sunlight);
   const soilList = normaliseArray(detail.soil);
@@ -227,8 +229,13 @@ function toPlantPayload(
     careLevel: detail.care_level ?? null,
     careNotes: summarise(detail.description),
     description: detail.description ?? null,
-    defaultImage: detail.default_image ?? null,
+    defaultImage: detail.default_image
+      ? { ...detail.default_image, localPath: imageLocalPath ?? undefined }
+      : imageLocalPath
+        ? { localPath: imageLocalPath }
+        : null,
     otherImages: detail.other_images ?? null,
+    imageLocalPath,
     wateringQuality,
     wateringPeriod,
     wateringAvgVolume: detail.xWateringAvgVolumeRequirement ?? null,
@@ -257,7 +264,24 @@ async function main() {
         continue;
       }
       const detail = await getSpeciesDetail(match.id);
-      const payload = toPlantPayload(detail, target.category, target.name);
+      const preferredImageUrl =
+        detail.default_image?.thumbnail ??
+        detail.default_image?.small_url ??
+        detail.default_image?.medium_url ??
+        detail.default_image?.regular_url ??
+        detail.default_image?.original_url ??
+        undefined;
+
+      const imageLocalPath = await persistPlantImage({
+        commonName: detail.common_name ?? fallbackTitle(target.name),
+        sourceUrl: preferredImageUrl,
+        fileNameHint: detail.default_image?.original_url ?? detail.default_image?.medium_url ?? undefined,
+      }).catch((error) => {
+        console.warn(`Could not persist image for ${target.name}: ${error instanceof Error ? error.message : error}`);
+        return null;
+      });
+
+      const payload = toPlantPayload(detail, target.category, target.name, imageLocalPath);
 
       await prisma.plant.upsert({
         where: { perenualId: payload.perenualId ?? match.id },
@@ -281,6 +305,10 @@ async function main() {
   } else {
     console.log("\nAll plants imported successfully!");
   }
+}
+
+function fallbackTitle(name: string) {
+  return toTitleCase(name);
 }
 
 main()

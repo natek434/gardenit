@@ -10,8 +10,14 @@ type PlantImage = {
 };
 
 export function PlantDetail({ plant }: { plant: PlantWithRelations }) {
-  const defaultImage = (plant.defaultImage as PlantImage | null) ?? null;
-  const defaultImageUrl = defaultImage?.medium_url ?? defaultImage?.regular_url ?? defaultImage?.small_url ?? undefined;
+  const defaultImage = (plant.defaultImage as PlantImage | (PlantImage & { localPath?: string }) | null) ?? null;
+  const defaultImageUrl =
+    plant.imageLocalPath ??
+    defaultImage?.medium_url ??
+    defaultImage?.regular_url ??
+    defaultImage?.small_url ??
+    (defaultImage as { localPath?: string } | null)?.localPath ??
+    undefined;
   const otherNames = plant.otherNames.filter(Boolean);
 
   const quickFacts: Array<{ title: string; value: string }> = [

@@ -70,6 +70,20 @@ The Prisma schema (see `prisma/schema.prisma`) models users, plants, planting wi
 
 The helper script automatically matches species by common name, fetches full detail payloads, and maps them to the extended Prisma schema. Any plants that cannot be matched are reported at the end so you can refine the target list or adjust the search term. The script is idempotent—rerunning it keeps data in sync with Perenual updates.
 
+### Manual imports without the API
+If you are rate limited or want to curate your own dataset, use the manual import workflow:
+
+1. Copy `data/manual-plant-template.json` to `data/manual-plant-import.json` (already tracked) and fill in the `plants` array with the fields you have available. Each entry accepts companion arrays, planting windows, and either a `sourceUrl` (the script will download the file) or a `localFile` path pointing to an image on disk.
+2. Place any local image assets anywhere on your machine—the importer copies them into `public/plants`, ensuring they ship with the app when you build or containerise Gardenit.
+3. Run the importer:
+
+   ```bash
+   pnpm plants:import
+   # or pnpm plants:import -- --file ./path/to/custom.json
+   ```
+
+The script validates your JSON, downloads or copies images into `public/plants`, records the local path on each `Plant`, and upserts the data. Because the images live under `public/`, they are bundled automatically into production builds and container images.
+
 ## Contributing
 1. Fork and clone the repository.
 2. Create a feature branch.
