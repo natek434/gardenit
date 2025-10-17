@@ -10,7 +10,7 @@ const statusToBadge: Record<string, { variant: Parameters<typeof Badge>[0]["vari
 
 export function PlantCard({ plant }: { plant: PlantWithStatus }) {
   const status = statusToBadge[plant.status.status];
-  const thumbnailUrl = resolvePlantImage(plant.defaultImage);
+  const thumbnailUrl = plant.imageLocalPath ?? resolvePlantImage(plant.defaultImage);
   return (
     <Link
       href={`/plants/${plant.id}`}

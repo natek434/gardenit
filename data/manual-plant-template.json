@@ -1,0 +1,31 @@
+{
+  "plants": [
+    {
+      "commonName": "Tomato",
+      "scientificName": "Solanum lycopersicum",
+      "category": "vegetable",
+      "sunRequirement": "Full sun",
+      "sunlightExposure": ["Full sun"],
+      "soilPreferences": ["Rich", "Well-drained"],
+      "waterGeneral": "Keep soil consistently moist without waterlogging.",
+      "watering": "Average",
+      "description": "Classic slicing tomato that thrives in warm, bright conditions.",
+      "careNotes": "Provide stakes or cages for support and mulch to retain moisture.",
+      "daysToMaturity": 75,
+      "careLevel": "Medium",
+      "propagationMethods": ["Seed"],
+      "attracts": ["Pollinators"],
+      "climateWindows": [
+        {
+          "climateZoneId": "NZ-NI-1",
+          "sowIndoors": [{ "start": 8, "end": 9 }],
+          "transplant": [{ "start": 10, "end": 11 }]
+        }
+      ],
+      "image": {
+        "sourceUrl": "https://example.com/images/tomato.jpg",
+        "fileName": "tomato.jpg"
+      }
+    }
+  ]
+}

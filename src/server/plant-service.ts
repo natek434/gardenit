@@ -32,6 +32,7 @@ const plantSelect = Prisma.validator<Prisma.PlantSelect>()({
   description: true,
   defaultImage: true,
   otherImages: true,
+  imageLocalPath: true,
   pruningMonth: true,
   pruningCount: true,
   seeds: true,
