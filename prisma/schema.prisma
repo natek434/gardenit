@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String?
+  locationLat   Float?
+  locationLon   Float?
+  climateZoneId String?
+  climateZone   ClimateZone? @relation(fields: [climateZoneId], references: [id])
+  gardens       Garden[]
+  reminders     Reminder[]
+  accounts      Account[]
+  sessions      Session[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model ClimateZone {
+  id          String   @id
+  name        String
+  country     String
+  frostFirst  DateTime?
+  frostLast   DateTime?
+  notes       String?
+  plants      ClimatePlantWindow[]
+}
+
+model Plant {
+  id                   String   @id @default(cuid())
+  commonName           String
+  scientificName       String?
+  category             String
+  sunRequirement       String
+  soilNotes            String?
+  waterGeneral         String
+  sowDepthMm           Int?
+  spacingInRowCm       Int?
+  spacingBetweenRowsCm Int?
+  daysToMaturity       Int?
+  careNotes            String?
+  companions           Companion[] @relation("CompanionsA")
+  antagonists          Companion[] @relation("CompanionsB")
+  climateWindows       ClimatePlantWindow[]
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model ClimatePlantWindow {
+  id            String  @id @default(cuid())
+  plantId       String
+  climateZoneId String
+  sowIndoors    Json?
+  sowOutdoors   Json?
+  transplant    Json?
+  notes         String?
+  plant         Plant       @relation(fields: [plantId], references: [id])
+  climateZone   ClimateZone @relation(fields: [climateZoneId], references: [id])
+
+  @@unique([plantId, climateZoneId])
+}
+
+model Companion {
+  id        String @id @default(cuid())
+  plantAId  String
+  plantBId  String
+  type      String
+  reason    String?
+  plantA    Plant  @relation("CompanionsA", fields: [plantAId], references: [id])
+  plantB    Plant  @relation("CompanionsB", fields: [plantBId], references: [id])
+}
+
+model Garden {
+  id       String   @id @default(cuid())
+  userId   String
+  name     String
+  widthCm  Int
+  heightCm Int
+  beds     Bed[]
+  user     User     @relation(fields: [userId], references: [id])
+}
+
+model Bed {
+  id        String  @id @default(cuid())
+  gardenId  String
+  name      String
+  widthCm   Int
+  heightCm  Int
+  plantings Planting[]
+  garden    Garden @relation(fields: [gardenId], references: [id])
+}
+
+model Planting {
+  id         String  @id @default(cuid())
+  bedId      String
+  plantId    String
+  startDate  DateTime
+  quantity   Int?
+  notes      String?
+  bed        Bed    @relation(fields: [bedId], references: [id])
+  plant      Plant  @relation(fields: [plantId], references: [id])
+}
+
+model Reminder {
+  id         String   @id @default(cuid())
+  userId     String
+  plantingId String?
+  title      String
+  dueAt      DateTime
+  cadence    String?
+  type       String
+  sentAt     DateTime?
+  user       User     @relation(fields: [userId], references: [id])
+  planting   Planting? @relation(fields: [plantingId], references: [id])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @map("refreshToken")
+  access_token      String? @map("accessToken")
+  expires_at        Int? @map("expiresAt")
+  token_type        String? @map("tokenType")
+  scope             String?
+  id_token          String? @map("idToken")
+  session_state     String? @map("sessionState")
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
