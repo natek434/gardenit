@@ -30,7 +30,7 @@
     "node-cron": "3.0.3",
     "next": "15.0.0-canary.52",
     "next-auth": "5.0.0-beta.21",
-    "next-secure-headers": "4.2.0",
+    "next-secure-headers": "2.2.0",
     "postgres": "3.4.3",
     "react": "18.3.1",
     "react-dom": "18.3.1",
