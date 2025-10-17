@@ -12,6 +12,25 @@ type PerenualListResponse = {
   data?: PerenualListItem[];
 };
 
+type PerenualImage = {
+  image_id?: number | null;
+  license?: number | null;
+  license_name?: string | null;
+  license_url?: string | null;
+  original_url?: string | null;
+  regular_url?: string | null;
+  medium_url?: string | null;
+  small_url?: string | null;
+  thumbnail?: string | null;
+};
+
+type PerenualDimensions = {
+  type?: string | null;
+  min_value?: number | null;
+  max_value?: number | null;
+  unit?: string | null;
+};
+
 type PerenualPlantDetail = {
   id: number;
   common_name?: string | null;
@@ -20,14 +39,15 @@ type PerenualPlantDetail = {
   family?: string | null;
   origin?: string | null;
   type?: string | null;
+  dimensions?: PerenualDimensions | null;
   cycle?: string | null;
   watering?: string | null;
   sunlight?: string[] | string | null;
   soil?: string[] | string | null;
-  watering_general_benchmark?: Record<string, unknown> | null;
-  plant_anatomy?: Record<string, unknown>[] | null;
+  watering_general_benchmark?: { value?: string | number | null; unit?: string | null } | null;
+  plant_anatomy?: Array<{ part?: string | null; color?: string[] | null }> | null;
   pruning_month?: string[] | null;
-  pruning_count?: Record<string, unknown> | null;
+  pruning_count?: { amount?: number | null; interval?: string | null } | null;
   seeds?: number | null;
   attracts?: string[] | null;
   propagation?: string[] | null;
@@ -58,8 +78,9 @@ type PerenualPlantDetail = {
   indoor?: boolean | null;
   care_level?: string | null;
   description?: string | null;
-  default_image?: Record<string, unknown> | null;
-  other_images?: Record<string, unknown>[] | null;
+  pest_susceptibility?: string[] | null;
+  default_image?: PerenualImage | null;
+  other_images?: PerenualImage[] | null;
   xWateringQuality?: string[] | null;
   xWateringPeriod?: string[] | null;
   xWateringAvgVolumeRequirement?: Record<string, unknown> | null;
@@ -71,7 +92,7 @@ type PerenualPlantDetail = {
   fruiting?: boolean | null;
 };
 
-const API_BASE = "https://perenual.com/api";
+const API_BASE = "https://perenual.com/api/v2";
 const API_KEY = process.env.PERENUAL_API_KEY;
 
 const prisma = new PrismaClient();
@@ -132,6 +153,13 @@ function summarise(text?: string | null): string | null {
   return trimmed.length > 280 ? `${trimmed.slice(0, 277)}...` : trimmed;
 }
 
+function toTitleCase(value: string): string {
+  if (!value) return value;
+  const lowered = value.toLowerCase();
+  const capitalised = lowered.replace(/(^|[\s\-\/\(\)\[\]'’])([a-z])/g, (_match, boundary, char) => `${boundary}${char.toUpperCase()}`);
+  return capitalised.replace(/\s+/g, " ").trim();
+}
+
 function toPlantPayload(
   detail: PerenualPlantDetail,
   category: "vegetable" | "herb" | "fruit",
@@ -139,7 +167,7 @@ function toPlantPayload(
 ): Prisma.PlantUncheckedCreateInput {
   const sunlightList = normaliseArray(detail.sunlight);
   const soilList = normaliseArray(detail.soil);
-  const otherNames = normaliseArray(detail.other_name);
+  const otherNames = normaliseArray(detail.other_name).map(toTitleCase);
   const attracts = normaliseArray(detail.attracts);
   const propagation = normaliseArray(detail.propagation);
   const pruningMonth = normaliseArray(detail.pruning_month);
@@ -148,7 +176,7 @@ function toPlantPayload(
 
   return {
     perenualId: detail.id,
-    commonName: detail.common_name ?? fallbackName,
+    commonName: toTitleCase(detail.common_name ?? fallbackName),
     scientificName: detail.scientific_name?.filter(Boolean).join(", ") ?? null,
     otherNames,
     family: detail.family ?? null,
