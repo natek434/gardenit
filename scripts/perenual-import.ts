@@ -1,0 +1,265 @@
+import "dotenv/config";
+import { Prisma, PrismaClient } from "@prisma/client";
+import { perenualTargets } from "../data/perenual-targets";
+
+type PerenualListItem = {
+  id: number;
+  common_name?: string | null;
+  scientific_name?: string[] | null;
+};
+
+type PerenualListResponse = {
+  data?: PerenualListItem[];
+};
+
+type PerenualPlantDetail = {
+  id: number;
+  common_name?: string | null;
+  scientific_name?: string[] | null;
+  other_name?: string[] | null;
+  family?: string | null;
+  origin?: string | null;
+  type?: string | null;
+  cycle?: string | null;
+  watering?: string | null;
+  sunlight?: string[] | string | null;
+  soil?: string[] | string | null;
+  watering_general_benchmark?: Record<string, unknown> | null;
+  plant_anatomy?: Record<string, unknown>[] | null;
+  pruning_month?: string[] | null;
+  pruning_count?: Record<string, unknown> | null;
+  seeds?: number | null;
+  attracts?: string[] | null;
+  propagation?: string[] | null;
+  hardiness?: { min?: string | null; max?: string | null } | null;
+  hardiness_location?: Record<string, unknown> | null;
+  flowers?: boolean | null;
+  flowering_season?: string | null;
+  cones?: boolean | null;
+  fruits?: boolean | null;
+  edible_fruit?: boolean | null;
+  fruiting_season?: string | null;
+  harvest_season?: string | null;
+  harvest_method?: string | null;
+  leaf?: boolean | null;
+  edible_leaf?: boolean | null;
+  growth_rate?: string | null;
+  maintenance?: string | null;
+  medicinal?: boolean | null;
+  poisonous_to_humans?: boolean | null;
+  poisonous_to_pets?: boolean | null;
+  drought_tolerant?: boolean | null;
+  salt_tolerant?: boolean | null;
+  thorny?: boolean | null;
+  invasive?: boolean | null;
+  rare?: boolean | null;
+  tropical?: boolean | null;
+  cuisine?: boolean | null;
+  indoor?: boolean | null;
+  care_level?: string | null;
+  description?: string | null;
+  default_image?: Record<string, unknown> | null;
+  other_images?: Record<string, unknown>[] | null;
+  xWateringQuality?: string[] | null;
+  xWateringPeriod?: string[] | null;
+  xWateringAvgVolumeRequirement?: Record<string, unknown> | null;
+  xWateringDepthRequirement?: Record<string, unknown> | null;
+  xWateringBasedTemperature?: Record<string, unknown> | null;
+  xWateringPhLevel?: Record<string, unknown> | null;
+  xSunlightDuration?: Record<string, unknown> | null;
+  flowering?: boolean | null;
+  fruiting?: boolean | null;
+};
+
+const API_BASE = "https://perenual.com/api";
+const API_KEY = process.env.PERENUAL_API_KEY;
+
+const prisma = new PrismaClient();
+
+async function fetchJson<T>(url: URL): Promise<T> {
+  const response = await fetch(url, { headers: { Accept: "application/json" } });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Request failed (${response.status}): ${text}`);
+  }
+  return (await response.json()) as T;
+}
+
+async function findSpecies(targetName: string) {
+  const url = new URL(`${API_BASE}/species-list`);
+  url.searchParams.set("key", API_KEY!);
+  url.searchParams.set("q", targetName);
+  url.searchParams.set("page", "1");
+
+  const list = await fetchJson<PerenualListResponse>(url);
+  const data = list.data ?? [];
+  if (data.length === 0) return null;
+  const lower = targetName.toLowerCase();
+  return (
+    data.find((item) => item.common_name?.toLowerCase() === lower) ??
+    data.find((item) => item.common_name?.toLowerCase().includes(lower)) ??
+    data[0]
+  );
+}
+
+async function getSpeciesDetail(id: number) {
+  const url = new URL(`${API_BASE}/species/details/${id}`);
+  url.searchParams.set("key", API_KEY!);
+  return fetchJson<PerenualPlantDetail>(url);
+}
+
+function normaliseArray(value: unknown): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => {
+        if (typeof entry === "string") return entry.trim();
+        if (entry == null) return "";
+        return String(entry).trim();
+      })
+      .filter((entry) => entry.length > 0);
+  }
+  if (typeof value === "string") {
+    return value.trim().length ? [value.trim()] : [];
+  }
+  return [];
+}
+
+function summarise(text?: string | null): string | null {
+  if (!text) return null;
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  return trimmed.length > 280 ? `${trimmed.slice(0, 277)}...` : trimmed;
+}
+
+function toPlantPayload(
+  detail: PerenualPlantDetail,
+  category: "vegetable" | "herb" | "fruit",
+  fallbackName: string,
+): Prisma.PlantUncheckedCreateInput {
+  const sunlightList = normaliseArray(detail.sunlight);
+  const soilList = normaliseArray(detail.soil);
+  const otherNames = normaliseArray(detail.other_name);
+  const attracts = normaliseArray(detail.attracts);
+  const propagation = normaliseArray(detail.propagation);
+  const pruningMonth = normaliseArray(detail.pruning_month);
+  const wateringQuality = normaliseArray(detail.xWateringQuality);
+  const wateringPeriod = normaliseArray(detail.xWateringPeriod);
+
+  return {
+    perenualId: detail.id,
+    commonName: detail.common_name ?? fallbackName,
+    scientificName: detail.scientific_name?.filter(Boolean).join(", ") ?? null,
+    otherNames,
+    family: detail.family ?? null,
+    origin: detail.origin ?? null,
+    plantType: detail.type ?? null,
+    category,
+    cycle: detail.cycle ?? null,
+    sunRequirement: sunlightList.length ? sunlightList.join(", ") : "Not specified",
+    sunlightExposure: sunlightList,
+    soilNotes: soilList.length ? soilList.join(", ") : null,
+    soilPreferences: soilList,
+    waterGeneral: detail.watering ?? "Not specified",
+    watering: detail.watering ?? null,
+    wateringGeneralBenchmark: detail.watering_general_benchmark ?? null,
+    plantAnatomy: detail.plant_anatomy ?? null,
+    pruningMonth,
+    pruningCount: detail.pruning_count ?? null,
+    seeds: detail.seeds ?? null,
+    attracts,
+    propagationMethods: propagation,
+    hardinessMin: detail.hardiness?.min ?? null,
+    hardinessMax: detail.hardiness?.max ?? null,
+    hardinessLocation: detail.hardiness_location ?? null,
+    flowers: detail.flowers ?? null,
+    floweringSeason: detail.flowering_season ?? null,
+    cones: detail.cones ?? null,
+    fruits: detail.fruits ?? null,
+    edibleFruit: detail.edible_fruit ?? null,
+    fruitingSeason: detail.fruiting_season ?? null,
+    harvestSeason: detail.harvest_season ?? null,
+    harvestMethod: detail.harvest_method ?? null,
+    leaf: detail.leaf ?? null,
+    edibleLeaf: detail.edible_leaf ?? null,
+    daysToMaturity: null,
+    growthRate: detail.growth_rate ?? null,
+    maintenanceLevel: detail.maintenance ?? null,
+    medicinal: detail.medicinal ?? null,
+    poisonousToHumans: detail.poisonous_to_humans ?? null,
+    poisonousToPets: detail.poisonous_to_pets ?? null,
+    droughtTolerant: detail.drought_tolerant ?? null,
+    saltTolerant: detail.salt_tolerant ?? null,
+    thorny: detail.thorny ?? null,
+    invasive: detail.invasive ?? null,
+    rare: detail.rare ?? null,
+    tropical: detail.tropical ?? null,
+    cuisine: detail.cuisine ?? null,
+    indoor: detail.indoor ?? null,
+    careLevel: detail.care_level ?? null,
+    careNotes: summarise(detail.description),
+    description: detail.description ?? null,
+    defaultImage: detail.default_image ?? null,
+    otherImages: detail.other_images ?? null,
+    wateringQuality,
+    wateringPeriod,
+    wateringAvgVolume: detail.xWateringAvgVolumeRequirement ?? null,
+    wateringDepth: detail.xWateringDepthRequirement ?? null,
+    wateringBasedTemperature: detail.xWateringBasedTemperature ?? null,
+    wateringPhLevel: detail.xWateringPhLevel ?? null,
+    sunlightDuration: detail.xSunlightDuration ?? null,
+    sowDepthMm: null,
+    spacingInRowCm: null,
+    spacingBetweenRowsCm: null,
+  };
+}
+
+async function main() {
+  if (!API_KEY) {
+    throw new Error("Missing PERENUAL_API_KEY. Set it in your environment to import plant data.");
+  }
+
+  const failures: Array<{ name: string; reason: string }> = [];
+
+  for (const target of perenualTargets) {
+    try {
+      const match = await findSpecies(target.name);
+      if (!match) {
+        failures.push({ name: target.name, reason: "No species match" });
+        continue;
+      }
+      const detail = await getSpeciesDetail(match.id);
+      const payload = toPlantPayload(detail, target.category, target.name);
+
+      await prisma.plant.upsert({
+        where: { perenualId: payload.perenualId ?? match.id },
+        update: payload,
+        create: payload,
+      });
+
+      console.log(`Imported ${target.name} (matched ${detail.common_name ?? match.common_name ?? "unknown"})`);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Unknown error";
+      failures.push({ name: target.name, reason });
+      console.error(`Failed to import ${target.name}: ${reason}`);
+    }
+  }
+
+  if (failures.length) {
+    console.warn("\nThe following plants could not be imported:");
+    for (const failure of failures) {
+      console.warn(` - ${failure.name}: ${failure.reason}`);
+    }
+  } else {
+    console.log("\nAll plants imported successfully!");
+  }
+}
+
+main()
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
