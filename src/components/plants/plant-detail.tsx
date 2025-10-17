@@ -1,21 +1,72 @@
 import { PlantWithRelations } from "@/src/server/plant-service";
 import { Badge } from "../ui/badge";
 
+type PlantImage = {
+  original_url?: string;
+  regular_url?: string;
+  medium_url?: string;
+  small_url?: string;
+  thumbnail?: string;
+};
+
 export function PlantDetail({ plant }: { plant: PlantWithRelations }) {
+  const defaultImage = (plant.defaultImage as PlantImage | null) ?? null;
+  const defaultImageUrl = defaultImage?.medium_url ?? defaultImage?.regular_url ?? defaultImage?.small_url ?? undefined;
+  const otherNames = plant.otherNames.filter(Boolean);
+
+  const quickFacts: Array<{ title: string; value: string }> = [
+    { title: "Sunlight", value: formatList(plant.sunlightExposure, plant.sunRequirement) },
+    { title: "Watering", value: plant.watering ?? plant.waterGeneral },
+    { title: "Soil preferences", value: formatList(plant.soilPreferences, plant.soilNotes) },
+    {
+      title: "Hardiness",
+      value:
+        plant.hardinessMin || plant.hardinessMax
+          ? `Zones ${plant.hardinessMin ?? "?"}-${plant.hardinessMax ?? "?"}`
+          : "Not specified",
+    },
+    { title: "Propagation", value: formatList(plant.propagationMethods) },
+    { title: "Attracts", value: formatList(plant.attracts) },
+    { title: "Growth rate", value: plant.growthRate ?? "Not specified" },
+    { title: "Maintenance", value: plant.maintenanceLevel ?? plant.careLevel ?? "Not specified" },
+    { title: "Medicinal", value: formatBoolean(plant.medicinal) },
+    { title: "Edible fruit", value: formatBoolean(plant.edibleFruit) },
+    { title: "Edible leaf", value: formatBoolean(plant.edibleLeaf) },
+  ];
+
   return (
     <div className="space-y-6">
-      <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">{plant.commonName}</h1>
-            <p className="text-sm text-slate-500">{plant.scientificName}</p>
+      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        {defaultImageUrl ? (
+          <div className="relative h-64 w-full bg-slate-100">
+            <img src={defaultImageUrl} alt={plant.commonName} className="h-full w-full object-cover" loading="lazy" />
           </div>
-          <div className="flex gap-2">
-            <Badge variant="muted">{plant.category}</Badge>
-            <Badge variant="muted">Sun: {plant.sunRequirement}</Badge>
+        ) : null}
+        <div className="space-y-4 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-semibold">{plant.commonName}</h1>
+              <p className="text-sm text-slate-500">{plant.scientificName}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="muted">{plant.category}</Badge>
+              {plant.cycle ? <Badge variant="muted">{plant.cycle}</Badge> : null}
+              {plant.careLevel ? <Badge variant="muted">Care: {plant.careLevel}</Badge> : null}
+            </div>
           </div>
+          {otherNames.length ? (
+            <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+              <span className="font-semibold uppercase tracking-wide text-slate-600">Also known as</span>
+              {otherNames.map((name) => (
+                <Badge key={name} variant="outline">
+                  {name}
+                </Badge>
+              ))}
+            </div>
+          ) : null}
+          {plant.description ? <p className="text-slate-600">{plant.description}</p> : null}
+          {plant.careNotes ? <p className="text-sm text-slate-500">{plant.careNotes}</p> : null}
         </div>
-        <p className="mt-4 text-slate-600">{plant.careNotes}</p>
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">
@@ -24,16 +75,20 @@ export function PlantDetail({ plant }: { plant: PlantWithRelations }) {
         <InfoCard title="Days to maturity" value={plant.daysToMaturity ? `${plant.daysToMaturity} days` : "--"} />
       </section>
 
+      <section className="grid gap-4 md:grid-cols-3">
+        {quickFacts.map((fact) => (
+          <InfoCard key={fact.title} title={fact.title} value={fact.value} />
+        ))}
+      </section>
+
       <section className="grid gap-4 md:grid-cols-2">
         <InfoCard
           title="Planting windows"
           value={formatWindows(plant.climateWindows)}
           helper="Months inclusive, based on your selected zone."
         />
-        <RelationCard title="Companions" relationships={plant.companions}
-          empty="No companions listed." />
-        <RelationCard title="Antagonists" relationships={plant.antagonists}
-          variant="danger" empty="No antagonists listed." />
+        <RelationCard title="Companions" relationships={plant.companions} empty="No companions listed." />
+        <RelationCard title="Antagonists" relationships={plant.antagonists} variant="danger" empty="No antagonists listed." />
       </section>
     </div>
   );
@@ -87,9 +142,7 @@ function RelationCard({ title, relationships, empty, variant = "success" }: Rela
   );
 }
 
-function formatWindows(
-  windows: PlantWithRelations["climateWindows"],
-): string {
+function formatWindows(windows: PlantWithRelations["climateWindows"]): string {
   if (!windows.length) {
     return "No calendar data available";
   }
@@ -112,4 +165,17 @@ function formatWindows(
 
 function monthName(month: number) {
   return new Date(2000, month - 1, 1).toLocaleString("en-NZ", { month: "short" });
+}
+
+function formatList(values: string[], fallback?: string | null) {
+  if (values?.length) {
+    return values.join(", ");
+  }
+  if (fallback) return fallback;
+  return "Not specified";
+}
+
+function formatBoolean(value?: boolean | null) {
+  if (value === undefined || value === null) return "Not specified";
+  return value ? "Yes" : "No";
 }

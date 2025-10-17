@@ -8,8 +8,8 @@ datasource db {
 }
 
 model User {
-  id            String       @id @default(cuid())
-  email         String       @unique
+  id            String   @id @default(cuid())
+  email         String   @unique
   name          String?
   locationLat   Float?
   locationLon   Float?
@@ -19,44 +19,95 @@ model User {
   reminders     Reminder[]
   accounts      Account[]
   sessions      Session[]
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model ClimateZone {
-  id         String               @id
-  name       String
-  country    String
-  frostFirst DateTime?
-  frostLast  DateTime?
-  notes      String?
-  plants     ClimatePlantWindow[]
-  User       User[]
+  id          String   @id
+  name        String
+  country     String
+  frostFirst  DateTime?
+  frostLast   DateTime?
+  notes       String?
+  plants      ClimatePlantWindow[]
 }
 
 model Plant {
-  id                   String               @id @default(cuid())
-  commonName           String
-  scientificName       String?
-  category             String
-  sunRequirement       String
-  soilNotes            String?
-  waterGeneral         String
-  sowDepthMm           Int?
-  spacingInRowCm       Int?
-  spacingBetweenRowsCm Int?
-  daysToMaturity       Int?
-  careNotes            String?
-  companions           Companion[]          @relation("CompanionsA")
-  antagonists          Companion[]          @relation("CompanionsB")
-  climateWindows       ClimatePlantWindow[]
-  createdAt            DateTime             @default(now())
-  updatedAt            DateTime             @updatedAt
-  Planting             Planting[]
+  id                      String   @id @default(cuid())
+  perenualId              Int?     @unique
+  commonName              String
+  scientificName          String?
+  otherNames              String[]
+  family                  String?
+  origin                  String?
+  plantType               String?
+  category                String
+  cycle                   String?
+  sunRequirement          String
+  sunlightExposure        String[]
+  soilNotes               String?
+  soilPreferences         String[]
+  waterGeneral            String
+  watering                String?
+  wateringGeneralBenchmark Json?
+  plantAnatomy            Json?
+  pruningMonth            String[]
+  pruningCount            Json?
+  seeds                   Int?
+  attracts                String[]
+  propagationMethods      String[]
+  hardinessMin            String?
+  hardinessMax            String?
+  hardinessLocation       Json?
+  flowers                 Boolean?
+  floweringSeason         String?
+  cones                   Boolean?
+  fruits                  Boolean?
+  edibleFruit             Boolean?
+  fruitingSeason          String?
+  harvestSeason           String?
+  harvestMethod           String?
+  leaf                    Boolean?
+  edibleLeaf              Boolean?
+  daysToMaturity          Int?
+  growthRate              String?
+  maintenanceLevel        String?
+  medicinal               Boolean?
+  poisonousToHumans       Boolean?
+  poisonousToPets         Boolean?
+  droughtTolerant         Boolean?
+  saltTolerant            Boolean?
+  thorny                  Boolean?
+  invasive                Boolean?
+  rare                    Boolean?
+  tropical                Boolean?
+  cuisine                 Boolean?
+  indoor                  Boolean?
+  careLevel               String?
+  careNotes               String?
+  description             String?
+  defaultImage            Json?
+  otherImages             Json?
+  wateringQuality         String[]
+  wateringPeriod          String[]
+  wateringAvgVolume       Json?
+  wateringDepth           Json?
+  wateringBasedTemperature Json?
+  wateringPhLevel         Json?
+  sunlightDuration        Json?
+  sowDepthMm              Int?
+  spacingInRowCm          Int?
+  spacingBetweenRowsCm    Int?
+  companions              Companion[] @relation("CompanionsA")
+  antagonists             Companion[] @relation("CompanionsB")
+  climateWindows          ClimatePlantWindow[]
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 }
 
 model ClimatePlantWindow {
-  id            String      @id @default(cuid())
+  id            String  @id @default(cuid())
   plantId       String
   climateZoneId String
   sowIndoors    Json?
@@ -70,49 +121,48 @@ model ClimatePlantWindow {
 }
 
 model Companion {
-  id       String  @id @default(cuid())
-  plantAId String
-  plantBId String
-  type     String
-  reason   String?
-  plantA   Plant   @relation("CompanionsA", fields: [plantAId], references: [id])
-  plantB   Plant   @relation("CompanionsB", fields: [plantBId], references: [id])
+  id        String @id @default(cuid())
+  plantAId  String
+  plantBId  String
+  type      String
+  reason    String?
+  plantA    Plant  @relation("CompanionsA", fields: [plantAId], references: [id])
+  plantB    Plant  @relation("CompanionsB", fields: [plantBId], references: [id])
 }
 
 model Garden {
-  id       String @id @default(cuid())
+  id       String   @id @default(cuid())
   userId   String
   name     String
   widthCm  Int
   heightCm Int
   beds     Bed[]
-  user     User   @relation(fields: [userId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
 }
 
 model Bed {
-  id        String     @id @default(cuid())
+  id        String  @id @default(cuid())
   gardenId  String
   name      String
   widthCm   Int
   heightCm  Int
   plantings Planting[]
-  garden    Garden     @relation(fields: [gardenId], references: [id])
+  garden    Garden @relation(fields: [gardenId], references: [id])
 }
 
 model Planting {
-  id        String     @id @default(cuid())
-  bedId     String
-  plantId   String
-  startDate DateTime
-  quantity  Int?
-  notes     String?
-  bed       Bed        @relation(fields: [bedId], references: [id])
-  plant     Plant      @relation(fields: [plantId], references: [id])
-  Reminder  Reminder[]
+  id         String  @id @default(cuid())
+  bedId      String
+  plantId    String
+  startDate  DateTime
+  quantity   Int?
+  notes      String?
+  bed        Bed    @relation(fields: [bedId], references: [id])
+  plant      Plant  @relation(fields: [plantId], references: [id])
 }
 
 model Reminder {
-  id         String    @id @default(cuid())
+  id         String   @id @default(cuid())
   userId     String
   plantingId String?
   title      String
@@ -120,7 +170,7 @@ model Reminder {
   cadence    String?
   type       String
   sentAt     DateTime?
-  user       User      @relation(fields: [userId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
   planting   Planting? @relation(fields: [plantingId], references: [id])
 }
 
@@ -132,7 +182,7 @@ model Account {
   providerAccountId String
   refresh_token     String? @map("refreshToken")
   access_token      String? @map("accessToken")
-  expires_at        Int?    @map("expiresAt")
+  expires_at        Int? @map("expiresAt")
   token_type        String? @map("tokenType")
   scope             String?
   id_token          String? @map("idToken")

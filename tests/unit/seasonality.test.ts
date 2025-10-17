@@ -8,19 +8,20 @@ vi.mock("@/src/lib/prisma", () => ({
   },
 }));
 
-const prisma = require("@/src/lib/prisma").prisma as {
+import { prisma } from "@/src/lib/prisma";
+import { getSeasonality } from "@/src/lib/seasonality";
+
+const prismaMock = prisma as unknown as {
   climatePlantWindow: { findUnique: ReturnType<typeof vi.fn> };
 };
 
-import { getSeasonality } from "@/src/lib/seasonality";
-
 describe("getSeasonality", () => {
   beforeEach(() => {
-    prisma.climatePlantWindow.findUnique.mockReset();
+    prismaMock.climatePlantWindow.findUnique.mockReset();
   });
 
   it("returns NOW when month in range", async () => {
-    prisma.climatePlantWindow.findUnique.mockResolvedValue({
+    prismaMock.climatePlantWindow.findUnique.mockResolvedValue({
       sowOutdoors: [{ start: 1, end: 3 }],
       sowIndoors: null,
       transplant: null,
@@ -30,7 +31,7 @@ describe("getSeasonality", () => {
   });
 
   it("returns COMING_SOON when month before range", async () => {
-    prisma.climatePlantWindow.findUnique.mockResolvedValue({
+    prismaMock.climatePlantWindow.findUnique.mockResolvedValue({
       sowOutdoors: [{ start: 6, end: 8 }],
       sowIndoors: null,
       transplant: null,
@@ -40,7 +41,7 @@ describe("getSeasonality", () => {
   });
 
   it("returns TOO_LATE when month after range", async () => {
-    prisma.climatePlantWindow.findUnique.mockResolvedValue({
+    prismaMock.climatePlantWindow.findUnique.mockResolvedValue({
       sowOutdoors: [{ start: 1, end: 2 }],
       sowIndoors: null,
       transplant: null,

@@ -20,8 +20,9 @@ export function PlantCard({ plant }: { plant: PlantWithStatus }) {
         {status ? <Badge variant={status.variant}>{status.label}</Badge> : null}
       </div>
       <p className="text-sm text-slate-600">{plant.waterGeneral}</p>
-      <div className="text-xs text-slate-500">
-        <p>Sun: {plant.sunRequirement}</p>
+      <div className="text-xs text-slate-500 space-y-1">
+        <p>Sun: {plant.sunlightExposure.length ? plant.sunlightExposure.join(", ") : plant.sunRequirement}</p>
+        <p>Watering: {plant.watering ?? plant.waterGeneral}</p>
         <p>Days to maturity: {plant.daysToMaturity ?? "--"}</p>
       </div>
     </Link>

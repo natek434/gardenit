@@ -18,15 +18,16 @@ vi.mock("@/src/lib/prisma", () => ({
 }));
 
 import { getCompatibility } from "@/src/server/compatibility-service";
+import { prisma } from "@/src/lib/prisma";
 
-const prisma = require("@/src/lib/prisma").prisma as {
+const prismaMock = prisma as unknown as {
   companion: { findMany: ReturnType<typeof vi.fn> };
 };
 
 describe("getCompatibility", () => {
   it("fetches relationships for given ids", async () => {
     const result = await getCompatibility(["a", "b"]);
-    expect(prisma.companion.findMany).toHaveBeenCalledWith({
+    expect(prismaMock.companion.findMany).toHaveBeenCalledWith({
       where: { OR: [{ plantAId: { in: ["a", "b"] } }, { plantBId: { in: ["a", "b"] } }] },
       include: {
         plantA: { select: { id: true, commonName: true } },
