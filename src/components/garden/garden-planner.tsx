@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useCallback } from "react";
-import type { DragEvent, FormEvent } from "react";
+import type { CSSProperties, DragEvent, FormEvent } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Button } from "../ui/button";
@@ -71,12 +71,41 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
   const [bedFeedback, setBedFeedback] = useState<FeedbackMessage | null>(null);
   const [gardenFeedback, setGardenFeedback] = useState<FeedbackMessage | null>(null);
   const [pendingPlacement, setPendingPlacement] = useState<PendingPlacement | null>(null);
+  const [placementFeedback, setPlacementFeedback] = useState<FeedbackMessage | null>(null);
 
   const activeGarden = gardens.find((garden) => garden.id === selectedGardenId) ?? gardens[0];
   const activeBed =
     activeGarden?.beds.find((bed) => bed.id === selectedBedId) ?? activeGarden?.beds[0] ?? null;
   const bedWidthCm = activeBed?.widthCm ?? 1;
   const bedLengthCm = activeBed?.lengthCm ?? 1;
+
+  const bedGrid = useMemo(() => {
+    if (!activeBed) return null;
+    const safeWidth = Math.max(1, bedWidthCm);
+    const safeLength = Math.max(1, bedLengthCm);
+    const maxDimension = Math.max(safeWidth, safeLength);
+    const baseCell = maxDimension > 400 ? 50 : maxDimension > 200 ? 25 : 10;
+    const majorCell = baseCell * 5;
+    const toPercent = (value: number, total: number) => `${((value / total) * 100).toFixed(4)}%`;
+
+    return {
+      cellCm: baseCell,
+      style: {
+        backgroundImage: [
+          "linear-gradient(to right, rgba(148, 163, 184, 0.35) 1px, transparent 1px)",
+          "linear-gradient(to bottom, rgba(148, 163, 184, 0.35) 1px, transparent 1px)",
+          "linear-gradient(to right, rgba(59, 130, 246, 0.35) 2px, transparent 2px)",
+          "linear-gradient(to bottom, rgba(59, 130, 246, 0.35) 2px, transparent 2px)",
+        ].join(", "),
+        backgroundSize: [
+          `${toPercent(baseCell, safeWidth)} ${toPercent(baseCell, safeLength)}`,
+          `${toPercent(baseCell, safeWidth)} ${toPercent(baseCell, safeLength)}`,
+          `${toPercent(majorCell, safeWidth)} ${toPercent(majorCell, safeLength)}`,
+          `${toPercent(majorCell, safeWidth)} ${toPercent(majorCell, safeLength)}`,
+        ].join(", "),
+      } as CSSProperties,
+    };
+  }, [activeBed, bedLengthCm, bedWidthCm]);
 
   useEffect(() => {
     if (!activeGarden) {
@@ -90,6 +119,7 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
 
   useEffect(() => {
     setPendingPlacement(null);
+    setPlacementFeedback(null);
   }, [selectedBedId, selectedGardenId]);
 
   const filteredPlants = useMemo(() => {
@@ -311,35 +341,130 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
       const safeWidth = Math.max(1, bed.widthCm);
       const safeLength = Math.max(1, bed.lengthCm);
       const spacing = getSpacing(pendingPlacement.plant);
+      const horizontalSpacing = Math.max(10, spacing.inRow);
+      const verticalSpacing = Math.max(10, spacing.between);
+      const proximityBuffer = Math.max(6, Math.min(horizontalSpacing, verticalSpacing) / 2);
+      const existingPositions: Array<{ x: number; y: number }> = bed.plantings
+        .map((planting) => ({
+          x: planting.positionX ?? safeWidth / 2,
+          y: planting.positionY ?? safeLength / 2,
+        }))
+        .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+      const positionIsFree = (x: number, y: number) =>
+        existingPositions.every((existing) => Math.hypot(existing.x - x, existing.y - y) >= proximityBuffer);
+      const registerPlacement = (x: number, y: number) => {
+        const roundedX = Math.round(x);
+        const roundedY = Math.round(y);
+        existingPositions.push({ x: roundedX, y: roundedY });
+        basePlacements.push({ positionX: roundedX, positionY: roundedY });
+      };
+      const clampRow = (value: number) => {
+        if (safeLength <= verticalSpacing) {
+          const center = clamp(value, safeLength / 2, safeLength / 2);
+          return center;
+        }
+        return clamp(value, verticalSpacing / 2, safeLength - verticalSpacing / 2);
+      };
+      const clampColumn = (value: number) => {
+        if (safeWidth <= horizontalSpacing) {
+          const center = clamp(value, safeWidth / 2, safeWidth / 2);
+          return center;
+        }
+        return clamp(value, horizontalSpacing / 2, safeWidth - horizontalSpacing / 2);
+      };
+      const findAvailableCoordinate = (
+        target: number,
+        spacingInterval: number,
+        clampFn: (value: number) => number,
+        isFree: (value: number) => boolean,
+        limit: number,
+      ) => {
+        const clampedTarget = clampFn(target);
+        if (isFree(clampedTarget)) {
+          return clampedTarget;
+        }
+        const maxIterations = Math.ceil(limit / spacingInterval) + 2;
+        for (let step = 1; step <= maxIterations; step++) {
+          const negative = clampFn(clampedTarget - step * spacingInterval);
+          if (negative !== clampedTarget && isFree(negative)) {
+            return negative;
+          }
+          const positive = clampFn(clampedTarget + step * spacingInterval);
+          if (positive !== clampedTarget && isFree(positive)) {
+            return positive;
+          }
+        }
+        return clampedTarget;
+      };
 
       if (mode === "single") {
-        basePlacements.push({
-          positionX: clamp(pendingPlacement.dropX, 0, safeWidth),
-          positionY: clamp(pendingPlacement.dropY, 0, safeLength),
-        });
+        const x = clampColumn(pendingPlacement.dropX);
+        const y = clampRow(pendingPlacement.dropY);
+        if (positionIsFree(x, y)) {
+          registerPlacement(x, y);
+        }
       } else if (mode === "width") {
-        const horizontalSpacing = Math.max(10, spacing.inRow);
-        const rowY = clamp(pendingPlacement.dropY, horizontalSpacing / 2, safeLength - horizontalSpacing / 2);
+        const rowY = findAvailableCoordinate(
+          pendingPlacement.dropY,
+          verticalSpacing,
+          clampRow,
+          (candidate) => existingPositions.every((point) => Math.abs(point.y - candidate) >= proximityBuffer),
+          safeLength,
+        );
         let current = horizontalSpacing / 2;
         while (current <= safeWidth) {
-          basePlacements.push({ positionX: Math.round(current), positionY: Math.round(rowY) });
+          const candidateX = clampColumn(current);
+          if (positionIsFree(candidateX, rowY)) {
+            registerPlacement(candidateX, rowY);
+          }
           current += horizontalSpacing;
         }
         if (!basePlacements.length) {
-          basePlacements.push({ positionX: Math.round(safeWidth / 2), positionY: Math.round(rowY) });
+          const fallbackX = clampColumn(pendingPlacement.dropX);
+          if (positionIsFree(fallbackX, rowY)) {
+            registerPlacement(fallbackX, rowY);
+          }
         }
       } else {
-        const verticalSpacing = Math.max(10, spacing.between);
-        const columnX = clamp(pendingPlacement.dropX, verticalSpacing / 2, safeWidth - verticalSpacing / 2);
+        const columnX = findAvailableCoordinate(
+          pendingPlacement.dropX,
+          horizontalSpacing,
+          clampColumn,
+          (candidate) => existingPositions.every((point) => Math.abs(point.x - candidate) >= proximityBuffer),
+          safeWidth,
+        );
         let current = verticalSpacing / 2;
         while (current <= safeLength) {
-          basePlacements.push({ positionX: Math.round(columnX), positionY: Math.round(current) });
+          const candidateY = clampRow(current);
+          if (positionIsFree(columnX, candidateY)) {
+            registerPlacement(columnX, candidateY);
+          }
           current += verticalSpacing;
         }
         if (!basePlacements.length) {
-          basePlacements.push({ positionX: Math.round(columnX), positionY: Math.round(safeLength / 2) });
+          const fallbackY = clampRow(pendingPlacement.dropY);
+          if (positionIsFree(columnX, fallbackY)) {
+            registerPlacement(columnX, fallbackY);
+          }
         }
       }
+
+      if (!basePlacements.length) {
+        setPlacementFeedback({
+          type: "error",
+          text: "No free space available near that drop point with the current spacing.",
+        });
+        setPendingPlacement(null);
+        return;
+      }
+
+      setPlacementFeedback({
+        type: "success",
+        text:
+          basePlacements.length === 1
+            ? `Placed 1 ${pendingPlacement.plant.name}`
+            : `Placed ${basePlacements.length} ${pendingPlacement.plant.name} plants`,
+      });
 
       createPlantings(
         pendingPlacement.bedId,
@@ -348,7 +473,7 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
       );
       setPendingPlacement(null);
     },
-    [createPlantings, getSpacing, pendingPlacement, resolveBedById],
+    [createPlantings, getSpacing, pendingPlacement, resolveBedById, setPlacementFeedback],
   );
 
   const cancelPlacement = useCallback(() => setPendingPlacement(null), []);
@@ -357,6 +482,7 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
     event.preventDefault();
     if (!activeBed) return;
     setPendingPlacement(null);
+    setPlacementFeedback(null);
     const rect = event.currentTarget.getBoundingClientRect();
     const xRatio = (event.clientX - rect.left) / rect.width;
     const yRatio = (event.clientY - rect.top) / rect.height;
@@ -384,6 +510,7 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
     if (plantingData) {
       const payload = JSON.parse(plantingData) as { plantingId: string };
       handleUpdatePlanting(payload.plantingId, x, y);
+      setPlacementFeedback({ type: "success", text: "Plant repositioned." });
     }
   };
 
@@ -542,7 +669,23 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
               className="relative w-full overflow-hidden rounded-lg border border-dashed border-slate-300 bg-slate-50"
               style={{ paddingBottom: `${(bedLengthCm / bedWidthCm) * 100}%` }}
             >
-              <div className="absolute inset-0" onDrop={handleDrop} onDragOver={handleDragOver}>
+              <div
+                className="absolute inset-0"
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                style={bedGrid?.style}
+              >
+                <div className="pointer-events-none absolute left-1/2 top-2 z-10 -translate-x-1/2 rounded bg-white/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 shadow-sm">
+                  Width: {bedWidthCm} cm
+                </div>
+                <div className="pointer-events-none absolute right-2 top-1/2 z-10 -translate-y-1/2 -rotate-90 rounded bg-white/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 shadow-sm">
+                  Length: {bedLengthCm} cm
+                </div>
+                {bedGrid ? (
+                  <div className="pointer-events-none absolute bottom-2 left-2 z-10 rounded bg-white/80 px-2 py-0.5 text-[10px] font-medium text-slate-600 shadow-sm">
+                    Grid: {bedGrid.cellCm}cm
+                  </div>
+                ) : null}
                 {activeBed.plantings.map((planting) => {
                   const left = planting.positionX ?? bedWidthCm / 2;
                   const top = planting.positionY ?? bedLengthCm / 2;
@@ -659,6 +802,15 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
                 </div>
               </div>
             </div>
+            {placementFeedback ? (
+              <p
+                className={`mt-2 text-xs ${
+                  placementFeedback.type === "error" ? "text-red-500" : "text-emerald-600"
+                }`}
+              >
+                {placementFeedback.text}
+              </p>
+            ) : null}
           </div>
         ) : (
           <p className="text-sm text-slate-500">
