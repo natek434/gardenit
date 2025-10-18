@@ -2,7 +2,8 @@ const OPEN_METEO_BASE_URL = process.env.OPEN_METEO_BASE_URL ?? "https://api.open
 
 export type ForecastDay = {
   date: string;
-  temperatureC: number;
+  temperatureMaxC: number;
+  temperatureMinC: number;
   rainChance: number;
 };
 
@@ -46,9 +47,12 @@ class OpenMeteoWeatherProvider implements WeatherProvider {
     const highs = data.daily?.temperature_2m_max ?? [];
     const rain = data.daily?.precipitation_probability_max ?? [];
 
+    const lows = data.daily?.temperature_2m_min ?? [];
+
     return times.map((time, index) => ({
       date: time,
-      temperatureC: typeof highs[index] === "number" ? highs[index]! : Number.NaN,
+      temperatureMaxC: typeof highs[index] === "number" ? highs[index]! : Number.NaN,
+      temperatureMinC: typeof lows[index] === "number" ? lows[index]! : Number.NaN,
       rainChance: typeof rain[index] === "number" ? Math.round(rain[index]!) : 0,
     }));
   }
