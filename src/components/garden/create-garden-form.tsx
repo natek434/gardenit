@@ -11,7 +11,8 @@ export function CreateGardenForm() {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const name = String(form.get("name") ?? "").trim();
     const width = Number(form.get("width"));
     const length = Number(form.get("length"));
@@ -32,7 +33,7 @@ export function CreateGardenForm() {
         setError(typeof data.error === "string" ? data.error : "Unable to create garden");
         return;
       }
-      (event.currentTarget as HTMLFormElement).reset();
+      formElement.reset();
       router.refresh();
     });
   };

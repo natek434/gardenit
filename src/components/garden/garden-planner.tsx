@@ -101,7 +101,8 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
   const handleCreateBed = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!activeGarden) return;
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const name = String(form.get("bedName") ?? "").trim();
     const width = Number(form.get("bedWidth"));
     const length = Number(form.get("bedLength"));
@@ -131,7 +132,7 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
         });
         return;
       }
-      (event.currentTarget as HTMLFormElement).reset();
+      formElement.reset();
       setBedFeedback({ type: "success", text: "Bed added" });
       router.refresh();
     });
