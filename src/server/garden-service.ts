@@ -37,13 +37,14 @@ export async function createPlanting(
   notes?: string,
   layout?: { positionX?: number | null; positionY?: number | null; spanWidth?: number | null; spanHeight?: number | null },
 ) {
+  const sanitizedNotes = typeof notes === "string" ? notes.trim() : "";
   const planting = await prisma.planting.create({
     data: {
       bedId,
       plantId,
       startDate,
       quantity,
-      notes,
+      notes: sanitizedNotes.length ? sanitizedNotes : null,
       positionX: layout?.positionX ?? null,
       positionY: layout?.positionY ?? null,
       spanWidth: layout?.spanWidth ?? null,
@@ -81,6 +82,7 @@ export function getGardensForUser(userId: string) {
                   defaultImage: true,
                   spacingInRowCm: true,
                   spacingBetweenRowsCm: true,
+                  daysToMaturity: true,
                 },
               },
             },
@@ -169,4 +171,30 @@ export async function deletePlanting(plantingId: string, userId: string) {
   }
   await prisma.reminder.deleteMany({ where: { plantingId } });
   return prisma.planting.delete({ where: { id: plantingId } });
+}
+
+export async function updatePlantingDetails(
+  plantingId: string,
+  data: { startDate?: Date; quantity?: number; notes?: string },
+) {
+  const payload: { startDate?: Date; quantity?: number; notes?: string | null } = {};
+  if (data.startDate) {
+    payload.startDate = data.startDate;
+  }
+  if (typeof data.quantity === "number") {
+    payload.quantity = data.quantity;
+  }
+  if (typeof data.notes === "string") {
+    const trimmed = data.notes.trim();
+    payload.notes = trimmed.length ? trimmed : null;
+  }
+  const planting = await prisma.planting.update({
+    where: { id: plantingId },
+    data: payload,
+  });
+  if (data.startDate) {
+    await prisma.reminder.deleteMany({ where: { plantingId } });
+    await scheduleCareReminders(plantingId);
+  }
+  return planting;
 }
