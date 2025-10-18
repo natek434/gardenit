@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Cloud, CloudRain, MapPin, Sun, ThermometerSun } from "lucide-react";
 import { auth } from "@/src/lib/auth/options";
 import { getClimateZones } from "@/src/server/climate-service";
 import { getWeatherProvider } from "@/src/lib/weather/provider";
@@ -26,20 +27,49 @@ export default async function SettingsPage() {
   }
 
   const user = await getUserProfile(session.user.id);
-  const latitude = user?.locationLat ?? -36.8485;
-  const longitude = user?.locationLon ?? 174.7633;
+  const hasLocation = typeof user?.locationLat === "number" && typeof user?.locationLon === "number";
+  const latitude = hasLocation ? (user?.locationLat as number) : -36.8485;
+  const longitude = hasLocation ? (user?.locationLon as number) : 174.7633;
+  const locationName = hasLocation ? user?.locationName ?? "Custom coordinates" : "Location not set";
 
   let forecast: Awaited<ReturnType<typeof provider.getForecast>> = [];
   let soilTemp: number | null = null;
   let todayFrostRisk: "low" | "medium" | "high" = "low";
 
-  try {
-    forecast = await provider.getForecast(latitude, longitude);
-    soilTemp = await provider.getSoilTemp(latitude, longitude);
-    todayFrostRisk = await provider.getFrostRisk(latitude, longitude, new Date());
-  } catch (error) {
-    console.error("Weather lookup failed", error);
+  if (hasLocation) {
+    try {
+      forecast = await provider.getForecast(latitude, longitude);
+      soilTemp = await provider.getSoilTemp(latitude, longitude);
+      todayFrostRisk = await provider.getFrostRisk(latitude, longitude, new Date());
+    } catch (error) {
+      console.error("Weather lookup failed", error);
+    }
   }
+
+  const getWeatherStyle = (rainChance: number) => {
+    if (rainChance >= 60) {
+      return {
+        tone: "bg-blue-50 border-blue-100",
+        accent: "text-blue-600",
+        Icon: CloudRain,
+        label: "Likely rain",
+      };
+    }
+    if (rainChance >= 30) {
+      return {
+        tone: "bg-slate-50 border-slate-100",
+        accent: "text-slate-600",
+        Icon: Cloud,
+        label: "Cloudy spells",
+      };
+    }
+    return {
+      tone: "bg-amber-50 border-amber-100",
+      accent: "text-amber-600",
+      Icon: Sun,
+      label: "Plenty of sun",
+    };
+  };
 
   return (
     <div className="space-y-6">
@@ -91,31 +121,67 @@ export default async function SettingsPage() {
           </a>
           . Soil and frost metrics update hourly.
         </p>
-        <div className="mt-4 flex flex-wrap gap-4 text-xs text-slate-600">
-          <p>
-            Soil temperature:{" "}
-            {soilTemp !== null && Number.isFinite(soilTemp) ? `${soilTemp.toFixed(1)}°C` : "—"}
+        <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-slate-700">
+          <p className="flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-primary" aria-hidden />
+            <span>
+              {locationName}
+              {hasLocation ? (
+                <span className="ml-1 text-xs text-slate-500">
+                  ({latitude.toFixed(3)}, {longitude.toFixed(3)})
+                </span>
+              ) : null}
+            </span>
           </p>
-          <p>Frost risk today: {todayFrostRisk}</p>
-          <p>
-            Coordinates: {latitude.toFixed(3)}, {longitude.toFixed(3)}
+          <p className="flex items-center gap-2">
+            <ThermometerSun className="h-4 w-4 text-amber-500" aria-hidden />
+            <span>
+              Soil temperature:{" "}
+              {hasLocation && soilTemp !== null && Number.isFinite(soilTemp) ? `${soilTemp.toFixed(1)}°C` : "—"}
+            </span>
+          </p>
+          <p className="flex items-center gap-2">
+            <Cloud className="h-4 w-4 text-slate-500" aria-hidden />
+            <span>Frost risk today: {hasLocation ? todayFrostRisk : "—"}</span>
           </p>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {forecast.length === 0 ? (
             <p className="text-sm text-slate-500">
-              Weather data is unavailable right now. Check your internet connection or try again soon.
+              {hasLocation
+                ? "Weather data is unavailable right now. Check your internet connection or try again soon."
+                : "Select a location above to unlock a personalised forecast."}
             </p>
           ) : (
-            forecast.map((day) => (
-              <div key={day.date} className="rounded border border-slate-200 p-4">
-                <p className="font-medium text-slate-700">{new Date(day.date).toDateString()}</p>
-                <p className="text-xs text-slate-500">
-                  High: {Number.isFinite(day.temperatureC) ? `${day.temperatureC.toFixed(1)}°C` : "—"}
-                </p>
-                <p className="text-xs text-slate-500">Rain chance: {day.rainChance ?? 0}%</p>
-              </div>
-            ))
+            forecast.map((day) => {
+              const style = getWeatherStyle(day.rainChance);
+              const Icon = style.Icon;
+              return (
+                <div key={day.date} className={`rounded border p-4 transition hover:shadow-sm ${style.tone}`}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-slate-800">{new Date(day.date).toDateString()}</p>
+                      <p className={`text-xs font-medium ${style.accent}`}>{style.label}</p>
+                    </div>
+                    <Icon className={`h-5 w-5 ${style.accent}`} aria-hidden />
+                  </div>
+                  <dl className="mt-3 space-y-1 text-xs text-slate-600">
+                    <div className="flex justify-between">
+                      <dt>High</dt>
+                      <dd>{Number.isFinite(day.temperatureMaxC) ? `${day.temperatureMaxC.toFixed(1)}°C` : "—"}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt>Low</dt>
+                      <dd>{Number.isFinite(day.temperatureMinC) ? `${day.temperatureMinC.toFixed(1)}°C` : "—"}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt>Rain chance</dt>
+                      <dd>{day.rainChance ?? 0}%</dd>
+                    </div>
+                  </dl>
+                </div>
+              );
+            })
           )}
         </div>
       </section>

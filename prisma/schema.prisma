@@ -12,6 +12,7 @@ model User {
   email         String   @unique
   name          String?
   hashedPassword String?
+  locationName  String?
   locationLat   Float?
   locationLon   Float?
   climateZoneId String?
