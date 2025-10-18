@@ -1,3 +1,35 @@
 {
-  "zones": []
+  "zones": [
+    { "id": "nz-kaitaia", "name": "Kaitaia", "country": "NZ", "frostFirst": "2024-06-20T00:00:00.000Z", "frostLast": "2024-08-01T00:00:00.000Z", "notes": "Subtropical Far North; frosts extremely rare." },
+    { "id": "nz-kerikeri", "name": "Kerikeri", "country": "NZ", "frostFirst": "2024-06-10T00:00:00.000Z", "frostLast": "2024-08-10T00:00:00.000Z", "notes": "Warm humid climate; rare frost inland only." },
+    { "id": "nz-whangarei", "name": "Whangārei", "country": "NZ", "frostFirst": "2024-06-01T00:00:00.000Z", "frostLast": "2024-08-15T00:00:00.000Z", "notes": "Mild coastal winters, brief inland frost season." },
+    { "id": "nz-auckland", "name": "Auckland", "country": "NZ", "frostFirst": "2024-06-05T00:00:00.000Z", "frostLast": "2024-08-10T00:00:00.000Z", "notes": "Frosts uncommon except rural outskirts." },
+    { "id": "nz-pukekohe", "name": "Pukekohe", "country": "NZ", "frostFirst": "2024-05-25T00:00:00.000Z", "frostLast": "2024-08-20T00:00:00.000Z", "notes": "Occasional light frost in low-lying areas." },
+    { "id": "nz-thames", "name": "Thames / Coromandel", "country": "NZ", "frostFirst": "2024-05-25T00:00:00.000Z", "frostLast": "2024-08-25T00:00:00.000Z", "notes": "Mild winters; frost mainly inland valleys." },
+    { "id": "nz-hamilton", "name": "Hamilton / Waikato", "country": "NZ", "frostFirst": "2024-05-10T00:00:00.000Z", "frostLast": "2024-09-05T00:00:00.000Z", "notes": "Frequent inland frost; sheltered basins cold." },
+    { "id": "nz-tauranga", "name": "Tauranga / Bay of Plenty", "country": "NZ", "frostFirst": "2024-06-01T00:00:00.000Z", "frostLast": "2024-08-25T00:00:00.000Z", "notes": "Coastal, very mild frost season." },
+    { "id": "nz-rotorua", "name": "Rotorua", "country": "NZ", "frostFirst": "2024-05-05T00:00:00.000Z", "frostLast": "2024-09-15T00:00:00.000Z", "notes": "Frequent frosts due to elevation." },
+    { "id": "nz-taupo", "name": "Taupō", "country": "NZ", "frostFirst": "2024-04-25T00:00:00.000Z", "frostLast": "2024-09-25T00:00:00.000Z", "notes": "High-altitude basin; long frost season." },
+    { "id": "nz-gisborne", "name": "Gisborne", "country": "NZ", "frostFirst": "2024-05-20T00:00:00.000Z", "frostLast": "2024-09-05T00:00:00.000Z", "notes": "Dry sunny region; mild frost inland." },
+    { "id": "nz-napier", "name": "Napier / Hawke’s Bay", "country": "NZ", "frostFirst": "2024-05-20T00:00:00.000Z", "frostLast": "2024-09-01T00:00:00.000Z", "notes": "Dry climate, light frost inland plains." },
+    { "id": "nz-hastings", "name": "Hastings", "country": "NZ", "frostFirst": "2024-05-15T00:00:00.000Z", "frostLast": "2024-09-05T00:00:00.000Z", "notes": "Frequent frosts in orchard valleys." },
+    { "id": "nz-newplymouth", "name": "New Plymouth / Taranaki", "country": "NZ", "frostFirst": "2024-06-01T00:00:00.000Z", "frostLast": "2024-08-20T00:00:00.000Z", "notes": "Coastal mild climate, rare frosts." },
+    { "id": "nz-whanganui", "name": "Whanganui", "country": "NZ", "frostFirst": "2024-06-05T00:00:00.000Z", "frostLast": "2024-08-25T00:00:00.000Z", "notes": "Occasional light frost inland only." },
+    { "id": "nz-palmerston", "name": "Palmerston North / Manawatū", "country": "NZ", "frostFirst": "2024-05-15T00:00:00.000Z", "frostLast": "2024-09-10T00:00:00.000Z", "notes": "Moderate frost season inland valleys." },
+    { "id": "nz-levin", "name": "Levin / Horowhenua", "country": "NZ", "frostFirst": "2024-06-01T00:00:00.000Z", "frostLast": "2024-09-01T00:00:00.000Z", "notes": "Short frost period, coastal influence." },
+    { "id": "nz-masterton", "name": "Masterton / Wairarapa", "country": "NZ", "frostFirst": "2024-05-10T00:00:00.000Z", "frostLast": "2024-09-20T00:00:00.000Z", "notes": "Frequent frosts, sheltered basin climate." },
+    { "id": "nz-wellington", "name": "Wellington", "country": "NZ", "frostFirst": "2024-06-15T00:00:00.000Z", "frostLast": "2024-08-25T00:00:00.000Z", "notes": "Windy coastal climate; frost rare except Hutt Valley." },
+    { "id": "nz-nelson", "name": "Nelson", "country": "NZ", "frostFirst": "2024-05-15T00:00:00.000Z", "frostLast": "2024-09-05T00:00:00.000Z", "notes": "Sunny, dry region; inland frost common." },
+    { "id": "nz-blenheim", "name": "Blenheim / Marlborough", "country": "NZ", "frostFirst": "2024-05-01T00:00:00.000Z", "frostLast": "2024-09-15T00:00:00.000Z", "notes": "Cold winters, frequent vineyard frosts." },
+    { "id": "nz-westport", "name": "Westport", "country": "NZ", "frostFirst": "2024-06-15T00:00:00.000Z", "frostLast": "2024-08-15T00:00:00.000Z", "notes": "Mild west coast, few frost days." },
+    { "id": "nz-greymouth", "name": "Greymouth", "country": "NZ", "frostFirst": "2024-06-10T00:00:00.000Z", "frostLast": "2024-08-20T00:00:00.000Z", "notes": "High rainfall, brief frost windows." },
+    { "id": "nz-hokitika", "name": "Hokitika", "country": "NZ", "frostFirst": "2024-05-25T00:00:00.000Z", "frostLast": "2024-08-25T00:00:00.000Z", "notes": "Cool mornings, light frost inland." },
+    { "id": "nz-christchurch", "name": "Christchurch / Canterbury Plains", "country": "NZ", "frostFirst": "2024-05-01T00:00:00.000Z", "frostLast": "2024-09-30T00:00:00.000Z", "notes": "Long frost season, dry cold air." },
+    { "id": "nz-ashburton", "name": "Ashburton", "country": "NZ", "frostFirst": "2024-04-25T00:00:00.000Z", "frostLast": "2024-10-01T00:00:00.000Z", "notes": "Frequent frosts; inland plains." },
+    { "id": "nz-timaru", "name": "Timaru", "country": "NZ", "frostFirst": "2024-04-20T00:00:00.000Z", "frostLast": "2024-10-05T00:00:00.000Z", "notes": "Regular frost, sheltered coastal plain." },
+    { "id": "nz-oamaru", "name": "Oamaru", "country": "NZ", "frostFirst": "2024-04-15T00:00:00.000Z", "frostLast": "2024-10-10T00:00:00.000Z", "notes": "Moderate frost season; coastal influence reduces severity." },
+    { "id": "nz-dunedin", "name": "Dunedin", "country": "NZ", "frostFirst": "2024-04-10T00:00:00.000Z", "frostLast": "2024-10-15T00:00:00.000Z", "notes": "Long cool winter; frost frequent inland suburbs." },
+    { "id": "nz-invercargill", "name": "Invercargill / Southland", "country": "NZ", "frostFirst": "2024-04-05T00:00:00.000Z", "frostLast": "2024-10-25T00:00:00.000Z", "notes": "Severe frosts common; long cold winter." },
+    { "id": "nz-queenstown", "name": "Queenstown / Central Otago", "country": "NZ", "frostFirst": "2024-04-01T00:00:00.000Z", "frostLast": "2024-10-31T00:00:00.000Z", "notes": "Very long frost season, alpine basin climate." }
+  ]
 }
