@@ -1,4 +1,5 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
+import bcrypt from "bcryptjs";
 import NextAuth, { NextAuthConfig } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { prisma } from "../prisma";
@@ -16,9 +17,9 @@ export const authConfig: NextAuthConfig = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials.password) return null;
         const user = await prisma.user.findUnique({ where: { email: credentials.email } });
-        if (!user) return null;
-        // Demo-only password check
-        if (credentials.password !== "gardenit") {
+        if (!user?.hashedPassword) return null;
+        const valid = await bcrypt.compare(credentials.password, user.hashedPassword);
+        if (!valid) {
           return null;
         }
         return user;
@@ -26,11 +27,22 @@ export const authConfig: NextAuthConfig = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.locationLat = (user as any).locationLat;
         token.locationLon = (user as any).locationLon;
         token.climateZoneId = (user as any).climateZoneId;
+      }
+      if (trigger === "update" && token.sub) {
+        const latest = await prisma.user.findUnique({
+          where: { id: token.sub },
+          select: { locationLat: true, locationLon: true, climateZoneId: true },
+        });
+        if (latest) {
+          token.locationLat = latest.locationLat;
+          token.locationLon = latest.locationLon;
+          token.climateZoneId = latest.climateZoneId;
+        }
       }
       return token;
     },
