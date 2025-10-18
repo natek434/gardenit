@@ -1,4 +1,5 @@
 import cron from "node-cron";
+import { NotificationRuleType } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { sendEmail } from "../lib/email";
 
@@ -8,7 +9,7 @@ const HOUR_IN_MS = 1000 * 60 * 60;
 
 type BuiltInRule = {
   name: string;
-  type: "time" | "weather" | "soil" | "phenology" | "garden";
+  type: NotificationRuleType;
   schedule?: string;
   params: Record<string, unknown>;
   throttleSecs?: number;

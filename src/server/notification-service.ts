@@ -1,3 +1,4 @@
+import { NotificationChannel, NotificationSeverity } from "@prisma/client";
 import { prisma } from "@/src/lib/prisma";
 
 export function getNotificationsByUser(userId: string) {
@@ -13,8 +14,8 @@ export async function recordNotification(
     ruleId?: string | null;
     title: string;
     body: string;
-    severity: "info" | "warning" | "critical";
-    channel: "push" | "email" | "inapp";
+    severity: NotificationSeverity;
+    channel: NotificationChannel;
     dueAt: Date;
     meta?: Record<string, unknown>;
   },

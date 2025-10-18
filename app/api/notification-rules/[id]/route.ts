@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { NotificationRuleType } from "@prisma/client";
 import { z } from "zod";
 import { auth } from "@/src/lib/auth/options";
 import {
@@ -12,6 +13,7 @@ const patchSchema = z.object({
   params: z.record(z.any()).optional(),
   throttleSecs: z.number().int().positive().optional(),
   isEnabled: z.boolean().optional(),
+  type: z.nativeEnum(NotificationRuleType).optional(),
 });
 
 export async function PATCH(

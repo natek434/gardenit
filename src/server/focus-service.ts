@@ -1,3 +1,4 @@
+import { FocusKind } from "@prisma/client";
 import { prisma } from "@/src/lib/prisma";
 
 export function getFocusItemsByUser(userId: string) {
@@ -9,7 +10,7 @@ export function getFocusItemsByUser(userId: string) {
 
 export async function createFocusItem(
   userId: string,
-  data: { kind: string; targetId: string; label?: string | null },
+  data: { kind: FocusKind; targetId: string; label?: string | null },
 ) {
   return prisma.focusItem.create({
     data: {
@@ -30,7 +31,7 @@ export async function deleteFocusItem(id: string, userId: string) {
 
 export async function upsertFocusItem(
   userId: string,
-  data: { kind: string; targetId: string; label?: string | null },
+  data: { kind: FocusKind; targetId: string; label?: string | null },
 ) {
   const existing = await prisma.focusItem.findFirst({
     where: { userId, kind: data.kind, targetId: data.targetId },

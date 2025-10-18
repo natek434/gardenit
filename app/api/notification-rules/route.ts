@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { NotificationRuleType } from "@prisma/client";
 import { z } from "zod";
 import { auth } from "@/src/lib/auth/options";
 import {
@@ -12,7 +13,7 @@ const getSchema = z.object({
 
 const postSchema = z.object({
   name: z.string(),
-  type: z.enum(["time", "weather", "soil", "phenology", "garden"]),
+  type: z.nativeEnum(NotificationRuleType),
   schedule: z.string().optional(),
   params: z.record(z.any()),
   throttleSecs: z.number().int().positive().optional(),

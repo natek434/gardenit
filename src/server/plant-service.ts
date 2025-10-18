@@ -77,6 +77,38 @@ const plantSelect = Prisma.validator<Prisma.PlantSelect>()({
 
 type PlantBase = Prisma.PlantGetPayload<{ select: typeof plantSelect }>;
 
+const plantAdminSelect = Prisma.validator<Prisma.PlantSelect>()({
+  id: true,
+  commonName: true,
+  scientificName: true,
+  category: true,
+  sunRequirement: true,
+  cycle: true,
+  daysToMaturity: true,
+  sowDepthMm: true,
+  spacingInRowCm: true,
+  spacingBetweenRowsCm: true,
+  careNotes: true,
+  imageLocalPath: true,
+  updatedAt: true,
+});
+
+export type PlantAdminSummary = Prisma.PlantGetPayload<{ select: typeof plantAdminSelect }>;
+
+export type PlantAdminUpdateInput = Partial<{
+  commonName: string;
+  scientificName: string | null;
+  category: string;
+  sunRequirement: string;
+  cycle: string | null;
+  daysToMaturity: number | null;
+  sowDepthMm: number | null;
+  spacingInRowCm: number | null;
+  spacingBetweenRowsCm: number | null;
+  careNotes: string | null;
+  imageLocalPath: string | null;
+}>;
+
 type ClimateWindowSelect = {
   select: { climateZoneId: true; sowOutdoors: true; sowIndoors: true; transplant: true };
 };
@@ -168,3 +200,19 @@ export const getPlant = cache(async (id: string, zone?: string) => {
   const status = await getSeasonality(new Date(), zone ?? plant.climateWindows[0]?.climateZoneId ?? "", plant.id);
   return { ...plant, status } satisfies PlantWithRelations;
 });
+
+export function getPlantsForAdmin(limit = 50) {
+  return prisma.plant.findMany({
+    select: plantAdminSelect,
+    orderBy: { commonName: "asc" },
+    take: limit,
+  });
+}
+
+export function updatePlantForAdmin(id: string, data: PlantAdminUpdateInput) {
+  return prisma.plant.update({
+    where: { id },
+    data,
+    select: plantAdminSelect,
+  });
+}

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import type { CSSProperties, DragEvent, FocusEvent, FormEvent, RefObject } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import type { FocusKind } from "@prisma/client";
 import { Button } from "../ui/button";
 import { useToast } from "../ui/toast";
 
@@ -66,7 +67,7 @@ type PendingPlacement = {
 
 type PlannerFocusItem = {
   id: string;
-  kind: "planting" | "bed" | "plant" | "task";
+  kind: FocusKind;
   targetId: string;
   label: string | null;
 };

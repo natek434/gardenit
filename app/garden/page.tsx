@@ -49,7 +49,7 @@ export default async function GardenPage() {
 
   const plannerFocus = focusItems.map((item) => ({
     id: item.id,
-    kind: item.kind as "planting" | "bed" | "plant" | "task",
+    kind: item.kind,
     targetId: item.targetId,
     label: item.label,
   }));

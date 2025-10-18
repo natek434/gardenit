@@ -20,6 +20,8 @@ export function Header(): ReactNode {
   const pathname = usePathname();
   const { data: session, status } = useSession();
 
+  const adminLinks = session?.user?.role === "ADMIN" ? [{ href: "/admin/plants", label: "Admin" }] : [];
+
   return (
     <header className="border-b border-slate-200 bg-white/80 backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
@@ -27,7 +29,7 @@ export function Header(): ReactNode {
           Gardenit
         </Link>
         <nav className="flex items-center gap-4 text-sm">
-          {links.map((link) => (
+          {[...links, ...adminLinks].map((link) => (
             <Link
               key={link.href}
               href={link.href}

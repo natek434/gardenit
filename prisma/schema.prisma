@@ -16,6 +16,7 @@ model User {
   locationLat   Float?
   locationLon   Float?
   climateZoneId String?
+  role          Role    @default(USER)
   climateZone   ClimateZone? @relation(fields: [climateZoneId], references: [id])
   gardens       Garden[]
   reminders     Reminder[]
@@ -179,44 +180,44 @@ model Planting {
 }
 
 model FocusItem {
-  id       String   @id @default(cuid())
+  id       String    @id @default(cuid())
   userId   String
-  kind     String
+  kind     FocusKind
   targetId String
   label    String?
   createdAt DateTime @default(now())
-  user     User     @relation(fields: [userId], references: [id])
+  user     User      @relation(fields: [userId], references: [id])
 
   @@index([userId, kind, targetId], name: "focus_user_target")
 }
 
 model NotificationRule {
-  id           String   @id @default(cuid())
+  id           String               @id @default(cuid())
   userId       String
   name         String
-  type         String
+  type         NotificationRuleType
   schedule     String?
   params       Json
-  isEnabled    Boolean  @default(true)
-  throttleSecs Int      @default(21600)
-  createdAt    DateTime @default(now())
-  user         User     @relation(fields: [userId], references: [id])
+  isEnabled    Boolean              @default(true)
+  throttleSecs Int                  @default(21600)
+  createdAt    DateTime             @default(now())
+  user         User                 @relation(fields: [userId], references: [id])
   notifications Notification[]
 }
 
 model Notification {
-  id        String   @id @default(cuid())
+  id        String              @id @default(cuid())
   userId    String
   ruleId    String?
   title     String
   body      String
-  severity  String
-  channel   String
+  severity  NotificationSeverity
+  channel   NotificationChannel
   dueAt     DateTime
   sentAt    DateTime?
   meta      Json?
-  user      User     @relation(fields: [userId], references: [id])
-  rule      NotificationRule? @relation(fields: [ruleId], references: [id])
+  user      User                @relation(fields: [userId], references: [id])
+  rule      NotificationRule?   @relation(fields: [ruleId], references: [id])
 }
 
 model PlantCollection {
@@ -288,4 +289,36 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum FocusKind {
+  planting
+  bed
+  plant
+  task
+}
+
+enum NotificationRuleType {
+  time
+  weather
+  soil
+  phenology
+  garden
+}
+
+enum NotificationSeverity {
+  info
+  warning
+  critical
+}
+
+enum NotificationChannel {
+  push
+  email
+  inapp
 }

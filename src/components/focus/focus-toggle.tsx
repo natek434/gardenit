@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import type { FocusKind } from "@prisma/client";
 import { useToast } from "@/src/components/ui/toast";
 
 type FocusToggleProps = {
-  kind: "plant" | "bed" | "planting" | "task";
+  kind: FocusKind;
   targetId: string;
   initialFocusId?: string;
   label?: string;

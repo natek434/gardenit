@@ -1,3 +1,4 @@
+import { NotificationRuleType } from "@prisma/client";
 import { prisma } from "@/src/lib/prisma";
 
 export function getNotificationRulesByUser(userId: string) {
@@ -11,7 +12,7 @@ export function createNotificationRule(
   userId: string,
   data: {
     name: string;
-    type: string;
+    type: NotificationRuleType;
     schedule?: string | null;
     params: Record<string, unknown>;
     throttleSecs?: number;
@@ -40,6 +41,7 @@ export function updateNotificationRule(
     params: Record<string, unknown>;
     throttleSecs: number;
     isEnabled: boolean;
+    type: NotificationRuleType;
   }>,
 ) {
   return prisma.notificationRule.update({

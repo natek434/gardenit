@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { FocusKind } from "@prisma/client";
 import { z } from "zod";
 import { auth } from "@/src/lib/auth/options";
 import { createFocusItem, getFocusItemsByUser, upsertFocusItem } from "@/src/server/focus-service";
@@ -8,7 +9,7 @@ const getSchema = z.object({
 });
 
 const postSchema = z.object({
-  kind: z.enum(["planting", "bed", "plant", "task"]),
+  kind: z.nativeEnum(FocusKind),
   targetId: z.string(),
   label: z.string().optional(),
   mode: z.enum(["create", "update"]).optional(),
