@@ -81,6 +81,7 @@ export function getGardensForUser(userId: string) {
                   defaultImage: true,
                   spacingInRowCm: true,
                   spacingBetweenRowsCm: true,
+                  daysToMaturity: true,
                 },
               },
             },
@@ -169,4 +170,29 @@ export async function deletePlanting(plantingId: string, userId: string) {
   }
   await prisma.reminder.deleteMany({ where: { plantingId } });
   return prisma.planting.delete({ where: { id: plantingId } });
+}
+
+export async function updatePlantingDetails(
+  plantingId: string,
+  data: { startDate?: Date; quantity?: number; notes?: string },
+) {
+  const payload: { startDate?: Date; quantity?: number; notes?: string | null } = {};
+  if (data.startDate) {
+    payload.startDate = data.startDate;
+  }
+  if (typeof data.quantity === "number") {
+    payload.quantity = data.quantity;
+  }
+  if (typeof data.notes === "string") {
+    payload.notes = data.notes;
+  }
+  const planting = await prisma.planting.update({
+    where: { id: plantingId },
+    data: payload,
+  });
+  if (data.startDate) {
+    await prisma.reminder.deleteMany({ where: { plantingId } });
+    await scheduleCareReminders(plantingId);
+  }
+  return planting;
 }

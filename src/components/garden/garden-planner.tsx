@@ -1,14 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
-import { useCallback } from "react";
-import type { CSSProperties, DragEvent, FormEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
+import type { CSSProperties, DragEvent, FocusEvent, FormEvent, RefObject } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Button } from "../ui/button";
+import { useToast } from "../ui/toast";
 
 // Roughly 30cm (~12") mirrors average spacing recommendations for many kitchen garden staples.
 const DEFAULT_SPACING_CM = 30;
+const DEFAULT_CELL_SIZE_CM = 10;
+const DAY_IN_MS = 1000 * 60 * 60 * 24;
+const DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
 
 type PlannerPlanting = {
   id: string;
@@ -16,6 +24,7 @@ type PlannerPlanting = {
   plantName: string;
   imageUrl: string | null;
   startDate: string;
+  daysToMaturity: number | null;
   positionX: number | null;
   positionY: number | null;
 };
@@ -55,57 +64,94 @@ type PendingPlacement = {
   topPercent: number;
 };
 
-type FeedbackMessage = { type: "success" | "error"; text: string };
+type PlannerFocusItem = {
+  id: string;
+  kind: "planting" | "bed" | "plant" | "task";
+  targetId: string;
+  label: string | null;
+};
+
+type DragPreview = {
+  bedId: string;
+  x: number;
+  y: number;
+  leftPercent: number;
+  topPercent: number;
+};
 
 export type GardenPlannerProps = {
   gardens: PlannerGarden[];
   plants: PlannerPlant[];
+  focusItems: PlannerFocusItem[];
 };
 
-export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
+function snapToCellCenter(xCm: number, yCm: number, cellSizeCm = DEFAULT_CELL_SIZE_CM) {
+  const safeCell = Math.max(1, cellSizeCm);
+  const col = Math.floor(Math.max(0, xCm) / safeCell);
+  const row = Math.floor(Math.max(0, yCm) / safeCell);
+  const centerX = col * safeCell + safeCell / 2;
+  const centerY = row * safeCell + safeCell / 2;
+  return { x: centerX, y: centerY };
+}
+
+function clampToBed(value: number, max: number, cellSizeCm: number) {
+  if (!Number.isFinite(value)) return Math.max(0, Math.min(max, max / 2));
+  if (max <= cellSizeCm) {
+    return Math.max(0, max / 2);
+  }
+  const halfCell = cellSizeCm / 2;
+  return Math.min(Math.max(value, halfCell), Math.max(halfCell, max - halfCell));
+}
+
+export function GardenPlanner({ gardens, plants, focusItems: initialFocus }: GardenPlannerProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [selectedGardenId, setSelectedGardenId] = useState(gardens[0]?.id ?? "");
   const [selectedBedId, setSelectedBedId] = useState(gardens[0]?.beds[0]?.id ?? "");
   const [isPending, startTransition] = useTransition();
-  const [bedFeedback, setBedFeedback] = useState<FeedbackMessage | null>(null);
-  const [gardenFeedback, setGardenFeedback] = useState<FeedbackMessage | null>(null);
   const [pendingPlacement, setPendingPlacement] = useState<PendingPlacement | null>(null);
-  const [placementFeedback, setPlacementFeedback] = useState<FeedbackMessage | null>(null);
+  const [cellSizeCm, setCellSizeCm] = useState(DEFAULT_CELL_SIZE_CM);
+  const [focusItems, setFocusItems] = useState(initialFocus);
+  const [showFocusOnly, setShowFocusOnly] = useState(false);
+  const [dragPreview, setDragPreview] = useState<DragPreview | null>(null);
+  const bedRef = useRef<HTMLDivElement | null>(null);
+  const { pushToast } = useToast();
 
   const activeGarden = gardens.find((garden) => garden.id === selectedGardenId) ?? gardens[0];
   const activeBed =
     activeGarden?.beds.find((bed) => bed.id === selectedBedId) ?? activeGarden?.beds[0] ?? null;
   const bedWidthCm = activeBed?.widthCm ?? 1;
   const bedLengthCm = activeBed?.lengthCm ?? 1;
+  const bedIconSizePx = useMemo(
+    () => Math.max(32, Math.min(60, Math.round(Math.min(bedWidthCm, bedLengthCm) / 8))),
+    [bedLengthCm, bedWidthCm],
+  );
 
   const bedGrid = useMemo(() => {
     if (!activeBed) return null;
     const safeWidth = Math.max(1, bedWidthCm);
     const safeLength = Math.max(1, bedLengthCm);
-    const maxDimension = Math.max(safeWidth, safeLength);
-    const baseCell = maxDimension > 400 ? 50 : maxDimension > 200 ? 25 : 10;
-    const majorCell = baseCell * 5;
-    const toPercent = (value: number, total: number) => `${((value / total) * 100).toFixed(4)}%`;
+    const minorWidthPercent = (cellSizeCm / safeWidth) * 100;
+    const minorLengthPercent = (cellSizeCm / safeLength) * 100;
+    const majorWidthPercent = ((cellSizeCm * 5) / safeWidth) * 100;
+    const majorLengthPercent = ((cellSizeCm * 5) / safeLength) * 100;
+    const minorColor = "rgba(148, 163, 184, 0.35)";
+    const majorColor = "rgba(59, 130, 246, 0.45)";
 
     return {
-      cellCm: baseCell,
+      cellCm: cellSizeCm,
       style: {
         backgroundImage: [
-          "linear-gradient(to right, rgba(148, 163, 184, 0.35) 1px, transparent 1px)",
-          "linear-gradient(to bottom, rgba(148, 163, 184, 0.35) 1px, transparent 1px)",
-          "linear-gradient(to right, rgba(59, 130, 246, 0.35) 2px, transparent 2px)",
-          "linear-gradient(to bottom, rgba(59, 130, 246, 0.35) 2px, transparent 2px)",
+          `repeating-linear-gradient(to right, transparent 0, transparent calc(${minorWidthPercent}% - 0.6px), ${minorColor} calc(${minorWidthPercent}% - 0.6px), ${minorColor} ${minorWidthPercent}%)`,
+          `repeating-linear-gradient(to bottom, transparent 0, transparent calc(${minorLengthPercent}% - 0.6px), ${minorColor} calc(${minorLengthPercent}% - 0.6px), ${minorColor} ${minorLengthPercent}%)`,
+          `repeating-linear-gradient(to right, transparent 0, transparent calc(${majorWidthPercent}% - 1px), ${majorColor} calc(${majorWidthPercent}% - 1px), ${majorColor} ${majorWidthPercent}%)`,
+          `repeating-linear-gradient(to bottom, transparent 0, transparent calc(${majorLengthPercent}% - 1px), ${majorColor} calc(${majorLengthPercent}% - 1px), ${majorColor} ${majorLengthPercent}%)`,
         ].join(", "),
-        backgroundSize: [
-          `${toPercent(baseCell, safeWidth)} ${toPercent(baseCell, safeLength)}`,
-          `${toPercent(baseCell, safeWidth)} ${toPercent(baseCell, safeLength)}`,
-          `${toPercent(majorCell, safeWidth)} ${toPercent(majorCell, safeLength)}`,
-          `${toPercent(majorCell, safeWidth)} ${toPercent(majorCell, safeLength)}`,
-        ].join(", "),
+        backgroundSize: "100% 100%",
+        backgroundRepeat: "repeat",
       } as CSSProperties,
     };
-  }, [activeBed, bedLengthCm, bedWidthCm]);
+  }, [activeBed, bedLengthCm, bedWidthCm, cellSizeCm]);
 
   useEffect(() => {
     if (!activeGarden) {
@@ -119,14 +165,98 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
 
   useEffect(() => {
     setPendingPlacement(null);
-    setPlacementFeedback(null);
+    setDragPreview(null);
   }, [selectedBedId, selectedGardenId]);
+
+  useEffect(() => {
+    setFocusItems(initialFocus);
+  }, [initialFocus]);
 
   const filteredPlants = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     if (!keyword) return plants;
     return plants.filter((plant) => plant.name.toLowerCase().includes(keyword));
   }, [plants, query]);
+
+  const focusPlantingIds = useMemo(
+    () => new Set(focusItems.filter((item) => item.kind === "planting").map((item) => item.targetId)),
+    [focusItems],
+  );
+  const focusBedIds = useMemo(
+    () => new Set(focusItems.filter((item) => item.kind === "bed").map((item) => item.targetId)),
+    [focusItems],
+  );
+  const focusPlantIds = useMemo(
+    () => new Set(focusItems.filter((item) => item.kind === "plant").map((item) => item.targetId)),
+    [focusItems],
+  );
+
+  const displayedPlantings = useMemo(() => {
+    if (!activeBed) return [] as PlannerPlanting[];
+    if (!showFocusOnly) return activeBed.plantings;
+    const isBedFocused = focusBedIds.has(activeBed.id);
+    return activeBed.plantings.filter(
+      (planting) =>
+        isBedFocused ||
+        focusPlantingIds.has(planting.id) ||
+        focusPlantIds.has(planting.plantId),
+    );
+  }, [activeBed, focusBedIds, focusPlantIds, focusPlantingIds, showFocusOnly]);
+
+  const isActiveBedFocused = activeBed ? focusBedIds.has(activeBed.id) : false;
+  const bedContainerClassName = [
+    "relative w-full rounded-lg border-2 bg-slate-50 shadow-[inset_0_0_0_2px_rgba(148,163,184,0.35)]",
+    isActiveBedFocused ? "border-primary ring-4 ring-primary/30" : "border-slate-400",
+  ].join(" ");
+
+  const toggleFocus = useCallback(
+    (kind: PlannerFocusItem["kind"], targetId: string, label?: string) => {
+      startTransition(async () => {
+        const existing = focusItems.find((item) => item.kind === kind && item.targetId === targetId);
+        if (existing) {
+          const response = await fetch(`/api/focus/${existing.id}`, { method: "DELETE" });
+          if (!response.ok) {
+            const data = await response.json().catch(() => ({ error: "Unable to update focus" }));
+            pushToast({
+              title: "Focus not removed",
+              description: typeof data.error === "string" ? data.error : "Unable to update focus",
+              variant: "error",
+            });
+            return;
+          }
+          setFocusItems((items) => items.filter((item) => item.id !== existing.id));
+          pushToast({
+            title: "Removed from focus",
+            description: "This item will no longer appear in the focus list.",
+            variant: "info",
+          });
+          return;
+        }
+        const response = await fetch("/api/focus", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kind, targetId, label, mode: "create" }),
+        });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({ error: "Unable to update focus" }));
+          pushToast({
+            title: "Focus not added",
+            description: typeof data.error === "string" ? data.error : "Unable to update focus",
+            variant: "error",
+          });
+          return;
+        }
+        const json = (await response.json()) as { focus: PlannerFocusItem };
+        setFocusItems((items) => [...items, json.focus]);
+        pushToast({
+          title: "Added to focus",
+          description: "We will prioritise this item in digests and alerts.",
+          variant: "success",
+        });
+      });
+    },
+    [focusItems, pushToast, startTransition],
+  );
 
   const handleCreateBed = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -138,10 +268,13 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
     const length = Number(form.get("bedLength"));
     const height = Number(form.get("bedHeight"));
     if (!name || Number.isNaN(width) || Number.isNaN(length) || Number.isNaN(height)) {
-      setBedFeedback({ type: "error", text: "Please provide a name and numeric dimensions." });
+      pushToast({
+        title: "Bed details incomplete",
+        description: "Add a name and numeric dimensions before creating a bed.",
+        variant: "error",
+      });
       return;
     }
-    setBedFeedback(null);
     startTransition(async () => {
       const response = await fetch("/api/beds", {
         method: "POST",
@@ -156,14 +289,19 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({ error: "Unable to add bed" }));
-        setBedFeedback({
-          type: "error",
-          text: typeof data.error === "string" ? data.error : "Unable to add bed",
+        pushToast({
+          title: "Bed could not be added",
+          description: typeof data.error === "string" ? data.error : "Unable to add bed",
+          variant: "error",
         });
         return;
       }
       formElement.reset();
-      setBedFeedback({ type: "success", text: "Bed added" });
+      pushToast({
+        title: "Bed added",
+        description: `${name} is now available in ${activeGarden.name}.`,
+        variant: "success",
+      });
       router.refresh();
     });
   };
@@ -198,10 +336,49 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
 
   const handleUpdatePlanting = (plantingId: string, x: number, y: number) => {
     startTransition(async () => {
-      await fetch("/api/plantings", {
+      const response = await fetch("/api/plantings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: plantingId, positionX: x, positionY: y }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({ error: "Unable to move planting" }));
+        pushToast({
+          title: "Could not reposition plant",
+          description: typeof data.error === "string" ? data.error : "Unable to move planting",
+          variant: "error",
+        });
+        return;
+      }
+      pushToast({
+        title: "Plant repositioned",
+        description: "The plant marker was moved to its new spot.",
+        variant: "success",
+      });
+      router.refresh();
+    });
+  };
+
+  const handleUpdatePlantingStartDate = (plantingId: string, startDate: string) => {
+    startTransition(async () => {
+      const response = await fetch("/api/plantings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: plantingId, startDate }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({ error: "Unable to update plant date" }));
+        pushToast({
+          title: "Could not update plant date",
+          description: typeof data.error === "string" ? data.error : "Unable to update plant date",
+          variant: "error",
+        });
+        return;
+      }
+      pushToast({
+        title: "Plant date updated",
+        description: "Reminder schedules have been refreshed.",
+        variant: "success",
       });
       router.refresh();
     });
@@ -209,7 +386,21 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
 
   const handleDeletePlanting = (plantingId: string) => {
     startTransition(async () => {
-      await fetch(`/api/plantings?id=${encodeURIComponent(plantingId)}`, { method: "DELETE" });
+      const response = await fetch(`/api/plantings?id=${encodeURIComponent(plantingId)}`, { method: "DELETE" });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({ error: "Unable to remove planting" }));
+        pushToast({
+          title: "Could not remove plant",
+          description: typeof data.error === "string" ? data.error : "Unable to remove planting",
+          variant: "error",
+        });
+        return;
+      }
+      pushToast({
+        title: "Plant removed",
+        description: "The plant has been cleared from this bed.",
+        variant: "info",
+      });
       router.refresh();
     });
   };
@@ -223,19 +414,23 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
       }
     }
 
-    setBedFeedback(null);
     startTransition(async () => {
       const response = await fetch(`/api/beds?id=${encodeURIComponent(bedId)}`, { method: "DELETE" });
       if (!response.ok) {
         const data = await response.json().catch(() => ({ error: "Unable to remove bed" }));
-        setBedFeedback({
-          type: "error",
-          text: typeof data.error === "string" ? data.error : "Unable to remove bed",
+        pushToast({
+          title: "Bed could not be removed",
+          description: typeof data.error === "string" ? data.error : "Unable to remove bed",
+          variant: "error",
         });
         return;
       }
       const nextBed = activeGarden.beds.find((bed) => bed.id !== bedId);
-      setBedFeedback({ type: "success", text: "Bed removed" });
+      pushToast({
+        title: "Bed removed",
+        description: "The bed and its plantings were deleted.",
+        variant: "warning",
+      });
       setSelectedBedId(nextBed?.id ?? "");
       router.refresh();
     });
@@ -251,10 +446,13 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
       }
       const trimmed = name.trim();
       if (!trimmed) {
-        setGardenFeedback({ type: "error", text: "Garden name cannot be empty." });
+        pushToast({
+          title: "Garden name required",
+          description: "Enter at least one character for the garden name.",
+          variant: "error",
+        });
         return;
       }
-      setGardenFeedback(null);
       startTransition(async () => {
         const response = await fetch("/api/garden", {
           method: "POST",
@@ -269,17 +467,22 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
         });
         if (!response.ok) {
           const data = await response.json().catch(() => ({ error: "Unable to rename garden" }));
-          setGardenFeedback({
-            type: "error",
-            text: typeof data.error === "string" ? data.error : "Unable to rename garden",
+          pushToast({
+            title: "Garden could not be renamed",
+            description: typeof data.error === "string" ? data.error : "Unable to rename garden",
+            variant: "error",
           });
           return;
         }
-        setGardenFeedback({ type: "success", text: "Garden renamed" });
+        pushToast({
+          title: "Garden renamed",
+          description: `Garden is now called ${trimmed}.`,
+          variant: "success",
+        });
         router.refresh();
       });
     },
-    [gardens, router, startTransition],
+    [gardens, pushToast, router, startTransition],
   );
 
   const handleDeleteGarden = useCallback(
@@ -290,25 +493,29 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
           return;
         }
       }
-      setGardenFeedback(null);
       const nextGarden = gardens.find((garden) => garden.id !== gardenId);
       startTransition(async () => {
         const response = await fetch(`/api/garden?id=${encodeURIComponent(gardenId)}`, { method: "DELETE" });
         if (!response.ok) {
           const data = await response.json().catch(() => ({ error: "Unable to remove garden" }));
-          setGardenFeedback({
-            type: "error",
-            text: typeof data.error === "string" ? data.error : "Unable to remove garden",
+          pushToast({
+            title: "Garden could not be removed",
+            description: typeof data.error === "string" ? data.error : "Unable to remove garden",
+            variant: "error",
           });
           return;
         }
-        setGardenFeedback({ type: "success", text: "Garden removed" });
+        pushToast({
+          title: "Garden removed",
+          description: "The garden and all related beds were deleted.",
+          variant: "warning",
+        });
         setSelectedGardenId(nextGarden?.id ?? "");
         setSelectedBedId(nextGarden?.beds[0]?.id ?? "");
         router.refresh();
       });
     },
-    [gardens, router, startTransition],
+    [gardens, pushToast, router, startTransition],
   );
 
   const resolveBedById = useCallback(
@@ -450,20 +657,22 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
       }
 
       if (!basePlacements.length) {
-        setPlacementFeedback({
-          type: "error",
-          text: "No free space available near that drop point with the current spacing.",
+        pushToast({
+          title: "No available space",
+          description: "Try another spot or adjust spacing to fit this plant.",
+          variant: "error",
         });
         setPendingPlacement(null);
         return;
       }
 
-      setPlacementFeedback({
-        type: "success",
-        text:
+      pushToast({
+        title: basePlacements.length === 1 ? "Plant placed" : "Plants placed",
+        description:
           basePlacements.length === 1
-            ? `Placed 1 ${pendingPlacement.plant.name}`
-            : `Placed ${basePlacements.length} ${pendingPlacement.plant.name} plants`,
+            ? `Placed ${pendingPlacement.plant.name}.`
+            : `Placed ${basePlacements.length} ${pendingPlacement.plant.name} plants.`,
+        variant: "success",
       });
 
       createPlantings(
@@ -473,7 +682,7 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
       );
       setPendingPlacement(null);
     },
-    [createPlantings, getSpacing, pendingPlacement, resolveBedById, setPlacementFeedback],
+    [createPlantings, getSpacing, pendingPlacement, pushToast, resolveBedById],
   );
 
   const cancelPlacement = useCallback(() => setPendingPlacement(null), []);
@@ -481,15 +690,26 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     if (!activeBed) return;
-    setPendingPlacement(null);
-    setPlacementFeedback(null);
-    const rect = event.currentTarget.getBoundingClientRect();
-    const xRatio = (event.clientX - rect.left) / rect.width;
-    const yRatio = (event.clientY - rect.top) / rect.height;
-    const x = Math.max(0, Math.min(activeBed.widthCm, Math.round(xRatio * activeBed.widthCm)));
-    const y = Math.max(0, Math.min(activeBed.lengthCm, Math.round(yRatio * activeBed.lengthCm)));
-
+    const rect = bedRef.current?.getBoundingClientRect() ?? event.currentTarget.getBoundingClientRect();
+    const xRatio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    const yRatio = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+    const rawX = xRatio * activeBed.widthCm;
+    const rawY = yRatio * activeBed.lengthCm;
+    const previewMatch = dragPreview && dragPreview.bedId === activeBed.id ? dragPreview : null;
+    const snapped = previewMatch ?? {
+      ...snapToCellCenter(rawX, rawY, cellSizeCm),
+      leftPercent: 0,
+      topPercent: 0,
+    };
+    const xCm = Number(
+      clampToBed(previewMatch ? previewMatch.x : snapped.x, activeBed.widthCm, cellSizeCm).toFixed(2),
+    );
+    const yCm = Number(
+      clampToBed(previewMatch ? previewMatch.y : snapped.y, activeBed.lengthCm, cellSizeCm).toFixed(2),
+    );
     const plantData = event.dataTransfer.getData("application/garden-plant");
+    setDragPreview(null);
+    setPendingPlacement(null);
     if (plantData) {
       const payload = JSON.parse(plantData) as { plantId: string };
       const plant = plants.find((item) => item.id === payload.plantId);
@@ -499,23 +719,49 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
       setPendingPlacement({
         bedId: activeBed.id,
         plant,
-        dropX: x,
-        dropY: y,
-        leftPercent: (x / activeBed.widthCm) * 100,
-        topPercent: (y / activeBed.lengthCm) * 100,
+        dropX: xCm,
+        dropY: yCm,
+        leftPercent: (xCm / activeBed.widthCm) * 100,
+        topPercent: (yCm / activeBed.lengthCm) * 100,
       });
       return;
     }
     const plantingData = event.dataTransfer.getData("application/garden-planting");
     if (plantingData) {
       const payload = JSON.parse(plantingData) as { plantingId: string };
-      handleUpdatePlanting(payload.plantingId, x, y);
-      setPlacementFeedback({ type: "success", text: "Plant repositioned." });
+      handleUpdatePlanting(payload.plantingId, xCm, yCm);
     }
   };
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
+    if (!activeBed) return;
+    const rect = bedRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const types = Array.from(event.dataTransfer.types ?? []);
+    if (!types.includes("application/garden-plant") && !types.includes("application/garden-planting")) {
+      setDragPreview(null);
+      return;
+    }
+    event.dataTransfer.dropEffect = types.includes("application/garden-planting") ? "move" : "copy";
+    const xRatio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    const yRatio = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+    const rawX = xRatio * activeBed.widthCm;
+    const rawY = yRatio * activeBed.lengthCm;
+    const snapped = snapToCellCenter(rawX, rawY, cellSizeCm);
+    const x = clampToBed(snapped.x, activeBed.widthCm, cellSizeCm);
+    const y = clampToBed(snapped.y, activeBed.lengthCm, cellSizeCm);
+    setDragPreview({
+      bedId: activeBed.id,
+      x,
+      y,
+      leftPercent: (x / activeBed.widthCm) * 100,
+      topPercent: (y / activeBed.lengthCm) * 100,
+    });
+  };
+
+  const handleDragLeave = () => {
+    setDragPreview(null);
   };
 
   return (
@@ -584,18 +830,50 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
                   Remove bed
                 </button>
               ) : null}
+              {activeBed ? (
+                <button
+                  type="button"
+                  onClick={() => toggleFocus("bed", activeBed.id, activeBed.name)}
+                  className={`text-xs font-semibold uppercase tracking-wide ${
+                    isActiveBedFocused ? "text-primary" : "text-slate-500 hover:text-primary"
+                  }`}
+                  disabled={isPending}
+                >
+                  {isActiveBedFocused ? "Unfocus bed" : "Focus bed"}
+                </button>
+              ) : null}
             </div>
           ) : null}
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-sm font-medium text-slate-700">
+              Grid size
+              <select
+                className="ml-2 rounded border border-slate-300 px-2 py-1 text-sm"
+                value={cellSizeCm}
+                onChange={(event) => setCellSizeCm(Math.max(1, Number(event.target.value)))}
+              >
+                {[5, 10, 15, 20].map((size) => (
+                  <option key={size} value={size}>
+                    {size} cm
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => focusItems.length && setShowFocusOnly((value) => !value)}
+              disabled={!focusItems.length}
+              className={`rounded px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
+                showFocusOnly ? "bg-primary text-white" : "border border-primary text-primary"
+              } ${!focusItems.length ? "cursor-not-allowed opacity-40" : ""}`}
+            >
+              {showFocusOnly ? "Showing focus" : "Focus only"}
+            </button>
+            {focusItems.length ? (
+              <span className="text-xs font-medium text-slate-500">{focusItems.length} focus items</span>
+            ) : null}
+          </div>
         </div>
-        {gardenFeedback ? (
-          <p
-            className={`text-xs ${
-              gardenFeedback.type === "error" ? "text-red-500" : "text-emerald-600"
-            }`}
-          >
-            {gardenFeedback.text}
-          </p>
-        ) : null}
         {activeGarden ? (
           <form
             onSubmit={handleCreateBed}
@@ -647,15 +925,6 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
                   />
                 </label>
             </div>
-            {bedFeedback ? (
-              <p
-                className={`text-xs ${
-                  bedFeedback.type === "error" ? "text-red-500" : "text-emerald-600"
-                }`}
-              >
-                {bedFeedback.text}
-              </p>
-            ) : null}
             <div>
               <Button type="submit" size="sm" disabled={isPending}>
                 {isPending ? "Saving…" : "Add bed"}
@@ -665,14 +934,14 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
         ) : null}
         {activeBed ? (
           <div>
-            <div
-              className="relative w-full overflow-hidden rounded-lg border border-dashed border-slate-300 bg-slate-50"
-              style={{ paddingBottom: `${(bedLengthCm / bedWidthCm) * 100}%` }}
-            >
+            <div className={bedContainerClassName} style={{ paddingBottom: `${(bedLengthCm / bedWidthCm) * 100}%` }}>
               <div
+                ref={bedRef}
+                data-testid="garden-bed-canvas"
                 className="absolute inset-0"
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
                 style={bedGrid?.style}
               >
                 <div className="pointer-events-none absolute left-1/2 top-2 z-10 -translate-x-1/2 rounded bg-white/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 shadow-sm">
@@ -686,51 +955,60 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
                     Grid: {bedGrid.cellCm}cm
                   </div>
                 ) : null}
-                {activeBed.plantings.map((planting) => {
+                {displayedPlantings.map((planting) => {
                   const left = planting.positionX ?? bedWidthCm / 2;
                   const top = planting.positionY ?? bedLengthCm / 2;
                   const leftPercent = (left / bedWidthCm) * 100;
                   const topPercent = (top / bedLengthCm) * 100;
+                  const isPlantingFocused =
+                    isActiveBedFocused ||
+                    focusPlantingIds.has(planting.id) ||
+                    focusPlantIds.has(planting.plantId);
                   return (
-                    <div
+                    <PlantingMarker
                       key={planting.id}
-                      draggable
-                      onDragStart={(event) => {
-                        event.dataTransfer.setData(
-                          "application/garden-planting",
-                          JSON.stringify({ plantingId: planting.id }),
-                        );
-                        event.dataTransfer.effectAllowed = "move";
-                      }}
-                      className="group absolute flex w-20 -translate-x-1/2 -translate-y-1/2 cursor-move flex-col items-center gap-2 rounded-lg border border-primary/40 bg-white p-2 text-center shadow"
-                      style={{ left: `${leftPercent}%`, top: `${topPercent}%` }}
-                    >
-                      {planting.imageUrl ? (
-                        <Image
-                          src={planting.imageUrl}
-                          alt={planting.plantName}
-                          width={64}
-                          height={64}
-                          className="h-16 w-16 rounded object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-16 w-16 items-center justify-center rounded bg-primary/10 text-sm font-semibold text-primary">
-                          {planting.plantName.charAt(0)}
-                        </div>
-                      )}
-                      <div className="space-y-1">
-                        <p className="text-xs font-medium text-slate-700">{planting.plantName}</p>
-                        <button
-                          type="button"
-                          onClick={() => handleDeletePlanting(planting.id)}
-                          className="hidden text-[10px] font-semibold uppercase tracking-wide text-red-500 group-hover:block"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
+                      planting={planting}
+                      leftPercent={leftPercent}
+                      topPercent={topPercent}
+                      iconSize={bedIconSizePx}
+                      onDelete={handleDeletePlanting}
+                      onUpdateStartDate={handleUpdatePlantingStartDate}
+                      onToggleFocus={() => toggleFocus("planting", planting.id, planting.plantName)}
+                      isFocused={isPlantingFocused}
+                      dimmed={!isPlantingFocused && focusItems.length > 0 && !showFocusOnly}
+                      bedId={activeBed.id}
+                      bedWidthCm={bedWidthCm}
+                      bedLengthCm={bedLengthCm}
+                      bedRef={bedRef}
+                      onDragPreview={(preview) => setDragPreview(preview)}
+                      isPending={isPending}
+                    />
                   );
                 })}
+                {dragPreview && dragPreview.bedId === activeBed.id ? (
+                  <>
+                    <div className="pointer-events-none absolute inset-0">
+                      <div
+                        className="absolute left-0 h-px w-full border-t border-dashed border-primary/50"
+                        style={{ top: `${dragPreview.topPercent}%` }}
+                      />
+                      <div
+                        className="absolute top-0 h-full w-px border-l border-dashed border-primary/50"
+                        style={{ left: `${dragPreview.leftPercent}%` }}
+                      />
+                    </div>
+                    <div
+                      className="pointer-events-none absolute flex items-center justify-center rounded-full border-2 border-primary/60 bg-primary/10"
+                      style={{
+                        left: `${dragPreview.leftPercent}%`,
+                        top: `${dragPreview.topPercent}%`,
+                        width: Math.max(16, bedIconSizePx * 0.6),
+                        height: Math.max(16, bedIconSizePx * 0.6),
+                        transform: "translate(-50%, -50%)",
+                      }}
+                    />
+                  </>
+                ) : null}
                 {pendingPlacement && pendingPlacement.bedId === activeBed.id ? (
                   <>
                     <div className="pointer-events-none absolute inset-0">
@@ -744,6 +1022,7 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
                       />
                     </div>
                     <div
+                      data-testid="pending-placement"
                       className="absolute z-20 w-60 max-w-[16rem] -translate-x-1/2 translate-y-3 space-y-2 rounded-lg border border-slate-200 bg-white p-3 text-left shadow-lg"
                       style={{ left: `${pendingPlacement.leftPercent}%`, top: `${pendingPlacement.topPercent}%` }}
                     >
@@ -802,15 +1081,6 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
                 </div>
               </div>
             </div>
-            {placementFeedback ? (
-              <p
-                className={`mt-2 text-xs ${
-                  placementFeedback.type === "error" ? "text-red-500" : "text-emerald-600"
-                }`}
-              >
-                {placementFeedback.text}
-              </p>
-            ) : null}
           </div>
         ) : (
           <p className="text-sm text-slate-500">
@@ -838,6 +1108,7 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
               key={plant.id}
               type="button"
               draggable
+              data-testid={`plant-card-${plant.id}`}
               onDragStart={(event) => {
                 event.dataTransfer.setData(
                   "application/garden-plant",
@@ -880,5 +1151,299 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
         </Button>
       </aside>
     </div>
+  );
+}
+
+type PlantingMarkerProps = {
+  planting: PlannerPlanting;
+  leftPercent: number;
+  topPercent: number;
+  iconSize: number;
+  onDelete: (id: string) => void;
+  onUpdateStartDate: (id: string, startDate: string) => void;
+  onToggleFocus: () => void;
+  isFocused: boolean;
+  dimmed: boolean;
+  bedId: string;
+  bedWidthCm: number;
+  bedLengthCm: number;
+  bedRef: RefObject<HTMLDivElement>;
+  onDragPreview: (preview: DragPreview | null) => void;
+  isPending: boolean;
+};
+
+
+function PlantingMarker({
+  planting,
+  leftPercent,
+  topPercent,
+  iconSize,
+  onDelete,
+  onUpdateStartDate,
+  onToggleFocus,
+  isFocused,
+  dimmed,
+  bedId,
+  bedWidthCm,
+  bedLengthCm,
+  bedRef,
+  onDragPreview,
+  isPending,
+}: PlantingMarkerProps) {
+  const startDate = useMemo(() => new Date(planting.startDate), [planting.startDate]);
+  const [draftDate, setDraftDate] = useState(startDate.toISOString().slice(0, 10));
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
+  const markerRef = useRef<HTMLDivElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const closeTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    setDraftDate(startDate.toISOString().slice(0, 10));
+  }, [startDate]);
+
+  const harvestDate = useMemo(() => {
+    if (!planting.daysToMaturity) return null;
+    return new Date(startDate.getTime() + planting.daysToMaturity * DAY_IN_MS);
+  }, [planting.daysToMaturity, startDate]);
+
+  const harvestDescriptor = useMemo(() => {
+    if (!harvestDate) return "No maturity data available";
+    const daysRemaining = Math.ceil((harvestDate.getTime() - Date.now()) / DAY_IN_MS);
+    if (daysRemaining > 0) {
+      return `${DATE_FORMATTER.format(harvestDate)} (${daysRemaining} day${daysRemaining === 1 ? "" : "s"} remaining)`;
+    }
+    if (daysRemaining === 0) {
+      return `${DATE_FORMATTER.format(harvestDate)} (ready today)`;
+    }
+    return `${DATE_FORMATTER.format(harvestDate)} (past maturity)`;
+  }, [harvestDate]);
+
+  const updatePopoverPosition = useCallback(() => {
+    if (!isPopoverOpen) return;
+    const bed = bedRef.current;
+    const popover = popoverRef.current;
+    if (!bed || !popover) return;
+    const bedRect = bed.getBoundingClientRect();
+    const popRect = popover.getBoundingClientRect();
+    const markerX = bedRect.left + (leftPercent / 100) * bedRect.width;
+    const markerY = bedRect.top + (topPercent / 100) * bedRect.height;
+    let left = markerX - popRect.width / 2;
+    const minLeft = bedRect.left + 8;
+    const maxLeft = bedRect.right - popRect.width - 8;
+    if (maxLeft >= minLeft) {
+      left = Math.min(Math.max(left, minLeft), maxLeft);
+    }
+    let top = markerY + 16;
+    if (top + popRect.height > bedRect.bottom) {
+      top = markerY - popRect.height - 16;
+    }
+    const minTop = bedRect.top + 8;
+    const maxTop = bedRect.bottom - popRect.height - 8;
+    if (maxTop >= minTop) {
+      top = Math.min(Math.max(top, minTop), maxTop);
+    }
+    setPopoverPosition({ top, left });
+  }, [bedRef, isPopoverOpen, leftPercent, topPercent]);
+
+  useLayoutEffect(() => {
+    if (!isPopoverOpen) return;
+    updatePopoverPosition();
+    const handle = () => updatePopoverPosition();
+    window.addEventListener("resize", handle);
+    window.addEventListener("scroll", handle, true);
+    return () => {
+      window.removeEventListener("resize", handle);
+      window.removeEventListener("scroll", handle, true);
+    };
+  }, [isPopoverOpen, updatePopoverPosition]);
+
+  useEffect(() => {
+    if (isPopoverOpen) {
+      updatePopoverPosition();
+    }
+  }, [iconSize, isPopoverOpen, updatePopoverPosition]);
+
+  const cancelClose = useCallback(() => {
+    if (closeTimer.current !== null) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  }, []);
+
+  const scheduleClose = useCallback(() => {
+    cancelClose();
+    closeTimer.current = window.setTimeout(() => setIsPopoverOpen(false), 120);
+  }, [cancelClose]);
+
+  const openPopover = useCallback(() => {
+    cancelClose();
+    setIsPopoverOpen(true);
+  }, [cancelClose]);
+
+  const handleBlur = (event: FocusEvent<HTMLDivElement>) => {
+    const next = event.relatedTarget as Node | null;
+    if (next && (popoverRef.current?.contains(next) || markerRef.current?.contains(next))) {
+      return;
+    }
+    scheduleClose();
+  };
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!draftDate) {
+      return;
+    }
+    const iso = new Date(`${draftDate}T00:00:00`).toISOString();
+    if (iso === planting.startDate) {
+      return;
+    }
+    onUpdateStartDate(planting.id, iso);
+  };
+
+  const preview = useMemo(
+    () => ({
+      bedId,
+      x: planting.positionX ?? bedWidthCm / 2,
+      y: planting.positionY ?? bedLengthCm / 2,
+      leftPercent,
+      topPercent,
+    }),
+    [bedId, bedLengthCm, bedWidthCm, leftPercent, planting.positionX, planting.positionY, topPercent],
+  );
+
+  const markerClasses = [
+    "flex items-center justify-center rounded-full border border-white bg-white text-xs font-semibold uppercase text-primary shadow cursor-move",
+    isFocused ? "ring-2 ring-primary" : "ring-2 ring-slate-200",
+    dimmed ? "opacity-70" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <>
+      <div
+        data-testid={`planting-marker-${planting.id}`}
+        className={`absolute -translate-x-1/2 -translate-y-1/2 focus:outline-none ${dimmed ? "opacity-75" : ""}`}
+        style={{ left: `${leftPercent}%`, top: `${topPercent}%` }}
+      >
+        <div
+          ref={markerRef}
+          className="relative flex flex-col items-center"
+          tabIndex={0}
+          onMouseEnter={openPopover}
+          onMouseLeave={scheduleClose}
+          onFocus={openPopover}
+          onBlur={handleBlur}
+        >
+          <div
+            className={markerClasses}
+            style={{ width: iconSize, height: iconSize }}
+            draggable
+            onDragStart={(event) => {
+              event.dataTransfer.setData(
+                "application/garden-planting",
+                JSON.stringify({ plantingId: planting.id }),
+              );
+              event.dataTransfer.effectAllowed = "move";
+              onDragPreview(preview);
+            }}
+            onDragEnd={() => onDragPreview(null)}
+          >
+            {planting.imageUrl ? (
+              <Image
+                src={planting.imageUrl}
+                alt={planting.plantName}
+                width={iconSize}
+                height={iconSize}
+                draggable={false}
+                className="h-full w-full rounded-full object-cover"
+              />
+            ) : (
+              planting.plantName.slice(0, 2).toUpperCase()
+            )}
+          </div>
+        </div>
+      </div>
+      {isPopoverOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={popoverRef}
+              data-testid="planting-popover"
+              className="fixed z-[9999] w-64 max-w-sm space-y-3 rounded-lg border border-slate-200 bg-white p-4 text-left text-slate-700 shadow-xl"
+              style={{ top: popoverPosition.top, left: popoverPosition.left }}
+              onMouseEnter={openPopover}
+              onMouseLeave={scheduleClose}
+              onFocus={openPopover}
+              onBlur={handleBlur}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  {planting.imageUrl ? (
+                    <Image
+                      src={planting.imageUrl}
+                      alt={planting.plantName}
+                      width={48}
+                      height={48}
+                      className="h-12 w-12 rounded object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-12 w-12 items-center justify-center rounded bg-primary/10 text-xs font-semibold uppercase text-primary">
+                      {planting.plantName.slice(0, 2).toUpperCase()}
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">{planting.plantName}</p>
+                    <p className="text-xs text-slate-500">Planted {DATE_FORMATTER.format(startDate)}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={onToggleFocus}
+                  className={`text-[11px] font-semibold uppercase tracking-wide ${
+                    isFocused ? "text-red-500" : "text-primary"
+                  }`}
+                  disabled={isPending}
+                >
+                  {isFocused ? "Unfocus" : "Focus"}
+                </button>
+              </div>
+              <div className="space-y-1 text-xs text-slate-600">
+                <p>Harvest ETA: {harvestDescriptor}</p>
+                {planting.daysToMaturity ? <p>Days to maturity: {planting.daysToMaturity}</p> : null}
+              </div>
+              <form onSubmit={handleSubmit} className="space-y-2">
+                <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+                  Plant date
+                  <input
+                    type="date"
+                    value={draftDate}
+                    onChange={(event) => setDraftDate(event.target.value)}
+                    disabled={isPending}
+                    className="w-full rounded border border-slate-300 px-2 py-1 text-xs focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                </label>
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="submit"
+                    disabled={isPending}
+                    className="rounded bg-primary px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white transition disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Save date
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDelete(planting.id)}
+                    className="text-[11px] font-semibold uppercase tracking-wide text-red-500 hover:text-red-600"
+                  >
+                    Remove plant
+                  </button>
+                </div>
+              </form>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }

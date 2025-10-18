@@ -19,6 +19,9 @@ model User {
   climateZone   ClimateZone? @relation(fields: [climateZoneId], references: [id])
   gardens       Garden[]
   reminders     Reminder[]
+  focusItems    FocusItem[]
+  notificationRules NotificationRule[]
+  notifications Notification[]
   accounts      Account[]
   sessions      Session[]
   collections   PlantCollection[]
@@ -175,6 +178,47 @@ model Planting {
   reminders  Reminder[]
 }
 
+model FocusItem {
+  id       String   @id @default(cuid())
+  userId   String
+  kind     String
+  targetId String
+  label    String?
+  createdAt DateTime @default(now())
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, kind, targetId], name: "focus_user_target")
+}
+
+model NotificationRule {
+  id           String   @id @default(cuid())
+  userId       String
+  name         String
+  type         String
+  schedule     String?
+  params       Json
+  isEnabled    Boolean  @default(true)
+  throttleSecs Int      @default(21600)
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id])
+  notifications Notification[]
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  ruleId    String?
+  title     String
+  body      String
+  severity  String
+  channel   String
+  dueAt     DateTime
+  sentAt    DateTime?
+  meta      Json?
+  user      User     @relation(fields: [userId], references: [id])
+  rule      NotificationRule? @relation(fields: [ruleId], references: [id])
+}
+
 model PlantCollection {
   id        String   @id @default(cuid())
   userId    String
@@ -207,6 +251,7 @@ model Reminder {
   cadence    String?
   type       String
   sentAt     DateTime?
+  details    String?
   user       User     @relation(fields: [userId], references: [id])
   planting   Planting? @relation(fields: [plantingId], references: [id])
 }
