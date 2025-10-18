@@ -5,7 +5,7 @@ import { Badge } from "../ui/badge";
 import { SunGlyph, WaterGlyph, FlowerGlyph, ThornGlyph, EdibleGlyph, CautionGlyph } from "./icons";
 
 const statusToBadge: Record<string, { variant: Parameters<typeof Badge>[0]["variant"]; label: string }> = {
-  NOW: { variant: "success", label: "Sow now" },
+  NOW: { variant: "success", label: "Plant now" },
   COMING_SOON: { variant: "warning", label: "Coming soon" },
   TOO_LATE: { variant: "danger", label: "Too late" },
 };

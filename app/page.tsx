@@ -17,6 +17,7 @@ export default async function HomePage() {
   let latitude: number | null = null;
   let longitude: number | null = null;
   let hasLocation = false;
+  let zone = "";
 
   if (session?.user?.id) {
     const profile = await getUserProfile(session.user.id);
@@ -25,6 +26,7 @@ export default async function HomePage() {
       latitude = profile.locationLat;
       longitude = profile.locationLon;
       locationName = profile.locationName ?? "Custom coordinates";
+      zone = profile.climateZone?.name ?? locationName;
       try {
         forecast = await provider.getForecast(profile.locationLat, profile.locationLon);
       } catch (error) {
@@ -52,7 +54,7 @@ export default async function HomePage() {
 
       <section className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Sow now in your zone</h2>
+          <h2 className="text-xl font-semibold">Plant now in {zone}</h2>
           <Link href="/plants" className="text-sm text-primary hover:underline">
             View all plants
           </Link>
