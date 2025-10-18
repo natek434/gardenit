@@ -2,20 +2,18 @@
 
 import { FormEvent, useState, useTransition } from "react";
 import { Button } from "../ui/button";
+import { useToast } from "../ui/toast";
 
 export function ForgotPasswordForm() {
-  const [status, setStatus] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const { pushToast } = useToast();
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const email = String(form.get("email") ?? "").trim();
-    setStatus(null);
     setToken(null);
-    setError(null);
 
     startTransition(async () => {
       const response = await fetch("/api/auth/forgot-password", {
@@ -26,12 +24,20 @@ export function ForgotPasswordForm() {
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({ error: "Unable to process request" }));
-        setError(typeof data.error === "string" ? data.error : "Unable to process request");
+        pushToast({
+          title: "Reset link not sent",
+          description: typeof data.error === "string" ? data.error : "Unable to process request",
+          variant: "error",
+        });
         return;
       }
 
       const result = (await response.json()) as { ok: boolean; token?: string };
-      setStatus("If an account exists for that email, a reset link has been generated.");
+      pushToast({
+        title: "Reset link requested",
+        description: "If that email is registered we\u2019ll send instructions shortly.",
+        variant: "success",
+      });
       if (result.token) {
         setToken(result.token);
       }
@@ -52,12 +58,6 @@ export function ForgotPasswordForm() {
           className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
         />
       </div>
-      {error ? (
-        <p className="text-sm text-red-600" role="alert">
-          {error}
-        </p>
-      ) : null}
-      {status ? <p className="text-sm text-slate-600">{status}</p> : null}
       {token ? (
         <div className="rounded border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">
           <p className="font-semibold">Developer shortcut</p>

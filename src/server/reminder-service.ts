@@ -7,6 +7,13 @@ export function getRemindersByUser(userId: string) {
   });
 }
 
-export function createReminder(data: { userId: string; title: string; dueAt: Date; cadence?: string; type: string }) {
+export function createReminder(data: {
+  userId: string;
+  title: string;
+  dueAt: Date;
+  cadence?: string;
+  type: string;
+  details?: string;
+}) {
   return prisma.reminder.create({ data });
 }

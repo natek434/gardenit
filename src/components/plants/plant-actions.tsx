@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Button } from "../ui/button";
+import { useToast } from "../ui/toast";
 
 type PlantActionsProps = {
   plantId: string;
@@ -11,17 +12,18 @@ type PlantActionsProps = {
 
 export function PlantActions({ plantId, collections }: PlantActionsProps) {
   const [selectedCollectionId, setSelectedCollectionId] = useState(collections[0]?.id ?? "");
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const { pushToast } = useToast();
 
   const handleSave = () => {
     if (!selectedCollectionId) {
-      setError("Choose a collection");
+      pushToast({
+        title: "Choose a collection",
+        description: "Select a collection before saving this plant.",
+        variant: "warning",
+      });
       return;
     }
-    setError(null);
-    setMessage(null);
     startTransition(async () => {
       const response = await fetch(`/api/collections/${selectedCollectionId}/plants`, {
         method: "POST",
@@ -30,10 +32,19 @@ export function PlantActions({ plantId, collections }: PlantActionsProps) {
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({ error: "Unable to save plant" }));
-        setError(typeof data.error === "string" ? data.error : "Unable to save plant");
+        pushToast({
+          title: "Plant not saved",
+          description: typeof data.error === "string" ? data.error : "Unable to save plant",
+          variant: "error",
+        });
         return;
       }
-      setMessage("Saved to collection");
+      const collectionName = collections.find((collection) => collection.id === selectedCollectionId)?.name;
+      pushToast({
+        title: "Plant saved",
+        description: collectionName ? `Added to ${collectionName}.` : "Saved to collection.",
+        variant: "success",
+      });
     });
   };
 
@@ -59,8 +70,6 @@ export function PlantActions({ plantId, collections }: PlantActionsProps) {
       <Link href="/garden" className="text-sm font-semibold text-primary hover:underline">
         Add via garden planner
       </Link>
-      {error ? <p className="text-xs text-red-500">{error}</p> : null}
-      {message ? <p className="text-xs text-emerald-600">{message}</p> : null}
     </div>
   );
 }

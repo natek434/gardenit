@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Button } from "../ui/button";
+import { useToast } from "../ui/toast";
 
 export type CollectionBoardProps = {
   collections: Array<{
@@ -19,9 +20,8 @@ export function CollectionBoard({ collections, plants }: CollectionBoardProps) {
   const [selectedCollectionId, setSelectedCollectionId] = useState(collections[0]?.id ?? "");
   const [query, setQuery] = useState("");
   const [newCollectionName, setNewCollectionName] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const { pushToast } = useToast();
 
   const filteredPlants = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -34,11 +34,13 @@ export function CollectionBoard({ collections, plants }: CollectionBoardProps) {
   const handleCreateCollection = () => {
     const name = newCollectionName.trim();
     if (name.length < 2) {
-      setError("Collection name must be at least 2 characters.");
+      pushToast({
+        title: "Name too short",
+        description: "Collection names need at least two characters.",
+        variant: "error",
+      });
       return;
     }
-    setError(null);
-    setMessage(null);
     startTransition(async () => {
       const response = await fetch("/api/collections", {
         method: "POST",
@@ -47,19 +49,25 @@ export function CollectionBoard({ collections, plants }: CollectionBoardProps) {
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({ error: "Unable to create collection" }));
-        setError(typeof data.error === "string" ? data.error : "Unable to create collection");
+        pushToast({
+          title: "Collection not created",
+          description: typeof data.error === "string" ? data.error : "Unable to create collection",
+          variant: "error",
+        });
         return;
       }
       setNewCollectionName("");
-      setMessage("Collection created");
+      pushToast({
+        title: "Collection created",
+        description: `${name} is ready for plants.`,
+        variant: "success",
+      });
       router.refresh();
     });
   };
 
   const handleAddToCollection = (plantId: string) => {
     if (!activeCollection) return;
-    setError(null);
-    setMessage(null);
     startTransition(async () => {
       const response = await fetch(`/api/collections/${activeCollection.id}/plants`, {
         method: "POST",
@@ -68,18 +76,24 @@ export function CollectionBoard({ collections, plants }: CollectionBoardProps) {
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({ error: "Unable to add plant" }));
-        setError(typeof data.error === "string" ? data.error : "Unable to add plant");
+        pushToast({
+          title: "Plant not saved",
+          description: typeof data.error === "string" ? data.error : "Unable to add plant",
+          variant: "error",
+        });
         return;
       }
-      setMessage("Plant saved to collection");
+      pushToast({
+        title: "Plant saved",
+        description: `Added to ${activeCollection.name}.`,
+        variant: "success",
+      });
       router.refresh();
     });
   };
 
   const handleRemoveFromCollection = (plantId: string) => {
     if (!activeCollection) return;
-    setError(null);
-    setMessage(null);
     startTransition(async () => {
       const response = await fetch(`/api/collections/${activeCollection.id}/plants`, {
         method: "DELETE",
@@ -88,10 +102,18 @@ export function CollectionBoard({ collections, plants }: CollectionBoardProps) {
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({ error: "Unable to remove plant" }));
-        setError(typeof data.error === "string" ? data.error : "Unable to remove plant");
+        pushToast({
+          title: "Plant not removed",
+          description: typeof data.error === "string" ? data.error : "Unable to remove plant",
+          variant: "error",
+        });
         return;
       }
-      setMessage("Plant removed");
+      pushToast({
+        title: "Plant removed",
+        description: `Removed from ${activeCollection.name}.`,
+        variant: "info",
+      });
       router.refresh();
     });
   };
@@ -104,11 +126,13 @@ export function CollectionBoard({ collections, plants }: CollectionBoardProps) {
     }
     const trimmed = name.trim();
     if (trimmed.length < 2) {
-      setError("Collection name must be at least 2 characters.");
+      pushToast({
+        title: "Name too short",
+        description: "Collection names need at least two characters.",
+        variant: "error",
+      });
       return;
     }
-    setError(null);
-    setMessage(null);
     startTransition(async () => {
       const response = await fetch("/api/collections", {
         method: "PATCH",
@@ -117,10 +141,18 @@ export function CollectionBoard({ collections, plants }: CollectionBoardProps) {
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({ error: "Unable to rename collection" }));
-        setError(typeof data.error === "string" ? data.error : "Unable to rename collection");
+        pushToast({
+          title: "Collection not renamed",
+          description: typeof data.error === "string" ? data.error : "Unable to rename collection",
+          variant: "error",
+        });
         return;
       }
-      setMessage("Collection renamed");
+      pushToast({
+        title: "Collection renamed",
+        description: `Now called ${trimmed}.`,
+        variant: "success",
+      });
       router.refresh();
     });
   };
@@ -133,8 +165,6 @@ export function CollectionBoard({ collections, plants }: CollectionBoardProps) {
         return;
       }
     }
-    setError(null);
-    setMessage(null);
     const nextCollection = collections.find((collection) => collection.id !== activeCollection.id);
     startTransition(async () => {
       const response = await fetch(`/api/collections?id=${encodeURIComponent(activeCollection.id)}`, {
@@ -142,10 +172,18 @@ export function CollectionBoard({ collections, plants }: CollectionBoardProps) {
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({ error: "Unable to remove collection" }));
-        setError(typeof data.error === "string" ? data.error : "Unable to remove collection");
+        pushToast({
+          title: "Collection not removed",
+          description: typeof data.error === "string" ? data.error : "Unable to remove collection",
+          variant: "error",
+        });
         return;
       }
-      setMessage("Collection removed");
+      pushToast({
+        title: "Collection removed",
+        description: `${activeCollection.name} was deleted.`,
+        variant: "warning",
+      });
       setSelectedCollectionId(nextCollection?.id ?? "");
       router.refresh();
     });
@@ -207,8 +245,6 @@ export function CollectionBoard({ collections, plants }: CollectionBoardProps) {
             </Button>
           </div>
         </div>
-        {error ? <p className="text-sm text-red-600">{error}</p> : null}
-        {message ? <p className="text-sm text-emerald-600">{message}</p> : null}
         {activeCollection ? (
           <div className="grid gap-3">
             <p className="text-sm font-semibold text-slate-700">Saved plants</p>
