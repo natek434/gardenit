@@ -7,10 +7,20 @@ export default async function SettingsPage() {
   const session = await auth();
   const zones = await getClimateZones();
   const provider = getWeatherProvider();
-  const forecast = await provider.getForecast(
-    session?.user?.locationLat ?? -36.8485,
-    session?.user?.locationLon ?? 174.7633,
-  );
+  const latitude = session?.user?.locationLat ?? -36.8485;
+  const longitude = session?.user?.locationLon ?? 174.7633;
+
+  let forecast: Awaited<ReturnType<typeof provider.getForecast>> = [];
+  let soilTemp: number | null = null;
+  let todayFrostRisk: "low" | "medium" | "high" = "low";
+
+  try {
+    forecast = await provider.getForecast(latitude, longitude);
+    soilTemp = await provider.getSoilTemp(latitude, longitude);
+    todayFrostRisk = await provider.getFrostRisk(latitude, longitude, new Date());
+  } catch (error) {
+    console.error("Weather lookup failed", error);
+  }
 
   return (
     <div className="space-y-6">
@@ -42,15 +52,44 @@ export default async function SettingsPage() {
 
       <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold">7-day outlook</h2>
-        <p className="mt-1 text-sm text-slate-600">Mock forecast data for your saved location.</p>
+        <p className="mt-1 text-sm text-slate-600">
+          Live observations provided by{" "}
+          <a
+            href="https://open-meteo.com/"
+            target="_blank"
+            rel="noreferrer"
+            className="font-semibold text-primary hover:underline"
+          >
+            Open-Meteo
+          </a>
+          . Soil and frost metrics update hourly.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-4 text-xs text-slate-600">
+          <p>
+            Soil temperature:{" "}
+            {soilTemp !== null && Number.isFinite(soilTemp) ? `${soilTemp.toFixed(1)}°C` : "—"}
+          </p>
+          <p>Frost risk today: {todayFrostRisk}</p>
+          <p>
+            Coordinates: {latitude.toFixed(3)}, {longitude.toFixed(3)}
+          </p>
+        </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {forecast.map((day) => (
-            <div key={day.date} className="rounded border border-slate-200 p-4">
-              <p className="font-medium text-slate-700">{new Date(day.date).toDateString()}</p>
-              <p className="text-xs text-slate-500">Temperature: {day.temperatureC.toFixed(1)}°C</p>
-              <p className="text-xs text-slate-500">Rain chance: {day.rainChance}%</p>
-            </div>
-          ))}
+          {forecast.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              Weather data is unavailable right now. Check your internet connection or try again soon.
+            </p>
+          ) : (
+            forecast.map((day) => (
+              <div key={day.date} className="rounded border border-slate-200 p-4">
+                <p className="font-medium text-slate-700">{new Date(day.date).toDateString()}</p>
+                <p className="text-xs text-slate-500">
+                  High: {Number.isFinite(day.temperatureC) ? `${day.temperatureC.toFixed(1)}°C` : "—"}
+                </p>
+                <p className="text-xs text-slate-500">Rain chance: {day.rainChance ?? 0}%</p>
+              </div>
+            ))
+          )}
         </div>
       </section>
     </div>

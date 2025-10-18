@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { PlantCard } from "@/src/components/plants/plant-card";
 import { getPlants } from "@/src/server/plant-service";
 import { Skeleton } from "@/src/components/ui/skeleton";
+import { PlantIconLegend } from "@/src/components/plants/legend";
 
 export default async function PlantsPage({ searchParams }: { searchParams: { query?: string } }) {
   return (
@@ -27,6 +28,7 @@ export default async function PlantsPage({ searchParams }: { searchParams: { que
           </button>
         </form>
       </header>
+      <PlantIconLegend />
       <Suspense key={searchParams.query} fallback={<PlantsFallback />}>
         <PlantsGrid query={searchParams.query} />
       </Suspense>
