@@ -10,6 +10,7 @@ declare module "next-auth" {
       locationLat?: number | null;
       locationLon?: number | null;
       climateZoneId?: string | null;
+      role?: "USER" | "ADMIN";
     };
   }
 }
@@ -19,5 +20,6 @@ declare module "next-auth/jwt" {
     locationLat?: number | null;
     locationLon?: number | null;
     climateZoneId?: string | null;
+    role?: "USER" | "ADMIN";
   }
 }

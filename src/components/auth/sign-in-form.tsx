@@ -1,25 +1,25 @@
 "use client";
 
-import { FormEvent, useState, useTransition } from "react";
+import { FormEvent, useTransition } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "../ui/button";
+import { useToast } from "../ui/toast";
 
 type SignInFormProps = {
   callbackUrl?: string;
 };
 
 export function SignInForm({ callbackUrl }: SignInFormProps) {
-  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const params = useSearchParams();
+  const { pushToast } = useToast();
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const email = String(form.get("email") ?? "");
     const password = String(form.get("password") ?? "");
-    setError(null);
 
     startTransition(async () => {
       const result = await signIn("credentials", {
@@ -30,7 +30,11 @@ export function SignInForm({ callbackUrl }: SignInFormProps) {
       });
 
       if (result?.error) {
-        setError("We couldn’t verify that email/password combination. Try again or contact support.");
+        pushToast({
+          title: "Sign in failed",
+          description: "We couldn’t verify that email/password combination. Try again or contact support.",
+          variant: "error",
+        });
         return;
       }
 
@@ -66,8 +70,6 @@ export function SignInForm({ callbackUrl }: SignInFormProps) {
         />
         <p className="text-xs text-slate-500">Demo accounts use the password <code>gardenit</code>.</p>
       </div>
-
-      {error ? <p className="text-sm text-red-600" role="alert">{error}</p> : null}
 
       <Button type="submit" className="w-full" disabled={isPending}>
         {isPending ? "Signing in…" : "Sign in"}

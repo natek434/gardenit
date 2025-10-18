@@ -32,16 +32,18 @@ export const authConfig: NextAuthConfig = {
         token.locationLat = (user as any).locationLat;
         token.locationLon = (user as any).locationLon;
         token.climateZoneId = (user as any).climateZoneId;
+        token.role = (user as any).role;
       }
       if (trigger === "update" && token.sub) {
         const latest = await prisma.user.findUnique({
           where: { id: token.sub },
-          select: { locationLat: true, locationLon: true, climateZoneId: true },
+          select: { locationLat: true, locationLon: true, climateZoneId: true, role: true },
         });
         if (latest) {
           token.locationLat = latest.locationLat;
           token.locationLon = latest.locationLon;
           token.climateZoneId = latest.climateZoneId;
+          token.role = latest.role;
         }
       }
       return token;
@@ -52,6 +54,7 @@ export const authConfig: NextAuthConfig = {
         session.user.locationLat = token.locationLat as number | undefined;
         session.user.locationLon = token.locationLon as number | undefined;
         session.user.climateZoneId = token.climateZoneId as string | undefined;
+        session.user.role = token.role as "USER" | "ADMIN" | undefined;
       }
       return session;
     },
