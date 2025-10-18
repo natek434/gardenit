@@ -1,12 +1,44 @@
+import Link from "next/link";
 import { auth } from "@/src/lib/auth/options";
-import { getPlantingsByUser } from "@/src/server/garden-service";
+import { getGardensForUser } from "@/src/server/garden-service";
 import { getPlants } from "@/src/server/plant-service";
-import { Button } from "@/src/components/ui/button";
+import { GardenPlanner } from "@/src/components/garden/garden-planner";
+import { CreateGardenForm } from "@/src/components/garden/create-garden-form";
 
 export default async function GardenPage() {
   const session = await auth();
-  const plantings = session?.user?.id ? await getPlantingsByUser(session.user.id) : [];
+  const gardens = session?.user?.id ? await getGardensForUser(session.user.id) : [];
   const plants = await getPlants();
+
+  const plannerGardens = gardens.map((garden) => ({
+    id: garden.id,
+    name: garden.name,
+    widthCm: garden.widthCm,
+    heightCm: garden.heightCm,
+    beds: garden.beds.map((bed) => ({
+      id: bed.id,
+      name: bed.name,
+      widthCm: bed.widthCm,
+      heightCm: bed.heightCm,
+      plantings: bed.plantings.map((planting) => ({
+        id: planting.id,
+        plantId: planting.plantId,
+        plantName: planting.plant.commonName,
+        imageUrl:
+          planting.plant.imageLocalPath ??
+          resolvePlantImage(planting.plant.defaultImage as Record<string, unknown> | null),
+        startDate: planting.startDate.toISOString(),
+        positionX: planting.positionX,
+        positionY: planting.positionY,
+      })),
+    })),
+  }));
+
+  const plannerPlants = plants.slice(0, 100).map((plant) => ({
+    id: plant.id,
+    name: plant.commonName,
+    imageUrl: plant.imageLocalPath ?? resolvePlantImage(plant.defaultImage as Record<string, unknown> | null),
+  }));
 
   return (
     <div className="space-y-6">
@@ -18,47 +50,46 @@ export default async function GardenPage() {
       </header>
 
       <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold">Bed planner</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Drag-and-drop planning is coming soon. For now, review suggested spacings and companion relationships.
-        </p>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {plants.slice(0, 6).map((plant) => (
-            <div key={plant.id} className="rounded border border-slate-200 p-4">
-              <h3 className="font-medium text-slate-800">{plant.commonName}</h3>
-              <p className="text-xs text-slate-500">
-                Spacing: {plant.spacingInRowCm ?? "--"}cm × {plant.spacingBetweenRowsCm ?? "--"}cm
-              </p>
-              <p className="mt-2 text-xs text-slate-500">Status: {plant.status.status}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Recent plantings</h2>
-          <Button variant="secondary" disabled>
-            Add planting
-          </Button>
+          <h2 className="text-lg font-semibold">Interactive bed planner</h2>
+          {!session?.user ? (
+            <Link href="/auth/signin" className="text-sm font-semibold text-primary hover:underline">
+              Sign in to save
+            </Link>
+          ) : null}
         </div>
-        {plantings.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-500">
-            No plantings yet. Sign in and add your beds to start receiving reminders.
-          </p>
+        <p className="mt-1 text-sm text-slate-600">
+          Drag plants from the library onto your beds to create plantings and adjust their layout.
+        </p>
+        {session?.user?.id ? (
+          plannerGardens.length ? (
+            <div className="mt-6">
+              <GardenPlanner gardens={plannerGardens} plants={plannerPlants} />
+            </div>
+          ) : (
+            <div className="mt-6 space-y-4">
+              <p className="text-sm text-slate-600">No gardens yet. Create your first garden to start planning layouts.</p>
+              <CreateGardenForm />
+            </div>
+          )
         ) : (
-          <ul className="mt-4 space-y-3">
-            {plantings.map((planting) => (
-              <li key={planting.id} className="rounded border border-slate-200 p-4">
-                <p className="font-medium text-slate-800">{planting.plant.commonName}</p>
-                <p className="text-xs text-slate-500">
-                  Started {planting.startDate.toDateString()} in bed {planting.bed.name}
-                </p>
-              </li>
-            ))}
-          </ul>
+          <div className="mt-4 rounded border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-600">
+            Sign in to turn on drag-and-drop planning and save plantings across devices.
+          </div>
         )}
       </section>
     </div>
   );
+}
+
+function resolvePlantImage(image: Record<string, unknown> | null): string | null {
+  if (!image) return null;
+  const candidates = ["thumbnail", "small_url", "medium_url", "regular_url", "original_url"];
+  for (const key of candidates) {
+    const value = image[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value;
+    }
+  }
+  return null;
 }
