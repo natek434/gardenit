@@ -4,6 +4,7 @@ import "./globals.css";
 import { Header } from "@/src/components/layout/header";
 import { Container } from "@/src/components/layout/container";
 import { SessionProvider } from "@/src/components/auth/session-provider";
+import { ToastProvider } from "@/src/components/ui/toast";
 import { auth } from "@/src/lib/auth/options";
 
 export const metadata: Metadata = {
@@ -16,12 +17,14 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang="en">
       <body className="bg-slate-50 text-slate-900">
-        <SessionProvider session={session}>
-          <Header />
-          <main>
-            <Container>{children}</Container>
-          </main>
-        </SessionProvider>
+        <ToastProvider>
+          <SessionProvider session={session}>
+            <Header />
+            <main>
+              <Container>{children}</Container>
+            </main>
+          </SessionProvider>
+        </ToastProvider>
       </body>
     </html>
   );

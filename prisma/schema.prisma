@@ -207,6 +207,7 @@ model Reminder {
   cadence    String?
   type       String
   sentAt     DateTime?
+  details    String?
   user       User     @relation(fields: [userId], references: [id])
   planting   Planting? @relation(fields: [plantingId], references: [id])
 }
