@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { PlantWithRelations } from "@/src/server/plant-service";
 import { Badge } from "../ui/badge";
+import { PlantActions } from "./plant-actions";
 
 type PlantImage = {
   original_url?: string;
@@ -9,7 +11,7 @@ type PlantImage = {
   thumbnail?: string;
 };
 
-export function PlantDetail({ plant }: { plant: PlantWithRelations }) {
+export function PlantDetail({ plant, collections }: { plant: PlantWithRelations; collections?: Array<{ id: string; name: string }> }) {
   const defaultImage = (plant.defaultImage as PlantImage | (PlantImage & { localPath?: string }) | null) ?? null;
   const defaultImageUrl =
     plant.imageLocalPath ??
@@ -60,6 +62,19 @@ export function PlantDetail({ plant }: { plant: PlantWithRelations }) {
               {plant.careLevel ? <Badge variant="muted">Care: {plant.careLevel}</Badge> : null}
             </div>
           </div>
+          {collections ? (
+            collections.length ? (
+              <PlantActions plantId={plant.id} collections={collections} />
+            ) : (
+              <div className="rounded border border-dashed border-slate-300 bg-slate-50 p-3 text-sm text-slate-600">
+                You don&apos;t have any collections yet. Create one on the{" "}
+                <Link href="/plants/collection" className="font-semibold text-primary hover:underline">
+                  collections page
+                </Link>
+                .
+              </div>
+            )
+          ) : null}
           {otherNames.length ? (
             <div className="flex flex-wrap gap-2 text-xs text-slate-500">
               <span className="font-semibold uppercase tracking-wide text-slate-600">Also known as</span>

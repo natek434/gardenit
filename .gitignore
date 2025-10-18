@@ -11,3 +11,4 @@ prisma/migrations
 
 # prisma generated
 prisma/generated
+tsconfig.tsbuildinfo

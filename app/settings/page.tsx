@@ -1,14 +1,33 @@
+import Link from "next/link";
 import { auth } from "@/src/lib/auth/options";
 import { getClimateZones } from "@/src/server/climate-service";
 import { getWeatherProvider } from "@/src/lib/weather/provider";
+import { getUserProfile } from "@/src/server/user-service";
 import { Badge } from "@/src/components/ui/badge";
+import { SettingsForm } from "@/src/components/settings/settings-form";
 
 export default async function SettingsPage() {
   const session = await auth();
   const zones = await getClimateZones();
   const provider = getWeatherProvider();
-  const latitude = session?.user?.locationLat ?? -36.8485;
-  const longitude = session?.user?.locationLon ?? 174.7633;
+
+  if (!session?.user?.id) {
+    return (
+      <div className="mx-auto max-w-2xl space-y-6 rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm">
+        <h1 className="text-2xl font-semibold">Sign in to manage your settings</h1>
+        <p className="text-sm text-slate-600">
+          You need a Gardenit account to customise your climate zone, coordinates, and notification preferences.
+        </p>
+        <Link href="/auth/signin" className="font-semibold text-primary hover:underline">
+          Go to sign in
+        </Link>
+      </div>
+    );
+  }
+
+  const user = await getUserProfile(session.user.id);
+  const latitude = user?.locationLat ?? -36.8485;
+  const longitude = user?.locationLon ?? 174.7633;
 
   let forecast: Awaited<ReturnType<typeof provider.getForecast>> = [];
   let soilTemp: number | null = null;
@@ -28,6 +47,14 @@ export default async function SettingsPage() {
         <h1 className="text-2xl font-semibold">Location & reminders</h1>
         <p className="text-sm text-slate-600">Manage your climate zone, frost preferences, and email reminders.</p>
       </header>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold">Your profile</h2>
+        <p className="mt-1 text-sm text-slate-600">Update your coordinates to personalise weather insights and sowing reminders.</p>
+        <div className="mt-4">
+          <SettingsForm user={user} zones={zones} />
+        </div>
+      </section>
 
       <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold">Climate zones</h2>
