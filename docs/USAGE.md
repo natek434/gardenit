@@ -17,6 +17,13 @@
 - Build conditional rules (time, weather, soil, phenology, garden) via the notification manager. Rules are throttled per the `throttleSecs` you supply.
 - Morning digests and other rules prioritise focus items; toggling focus on plants or beds affects scheduling immediately.
 
+#### Creating custom conditional rules
+1. Open **Notifications → Conditional triggers** and choose **Guided builder** to start from friendly fields for the selected rule type (time, weather, soil, phenology, or garden).
+2. Populate the condition inputs—e.g. weather probability thresholds, soil temperatures, or overdue task hours. Optional checkboxes let you include focus items, suppress tasks, or limit the scope to specific species.
+3. Configure the action payload by setting notification titles, messages, severity, delivery channel, and (for weather rules) whether to skip tasks when the rule fires. A live JSON preview updates as you tweak the guided form so you can confirm the underlying payload.
+4. Need something more specialised? Switch to **JSON editor** to paste or handcraft the `params` object directly. Toggling back to the guided builder attempts to hydrate the friendly controls from your JSON so you can fine-tune without losing structure.
+5. Submit the form to create the rule. It appears under **Your conditional rules** with a natural-language summary, quick enable/pause buttons, and an expandable JSON view for auditing.
+
 ## Admin operations
 
 ### Promoting an administrator
