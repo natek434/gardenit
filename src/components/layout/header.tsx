@@ -12,6 +12,7 @@ const links: Array<{ href: string; label: string }> = [
   { href: "/plants", label: "Plants" },
   { href: "/plants/collection", label: "Collections" },
   { href: "/garden", label: "My Garden" },
+  { href: "/notifications", label: "Notifications" },
   { href: "/settings", label: "Settings" },
 ];
 

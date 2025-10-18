@@ -1,13 +1,14 @@
 "use client";
 
-import { FormEvent, useState, useTransition } from "react";
+import { FormEvent, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "../ui/button";
+import { useToast } from "../ui/toast";
 
 export function CreateGardenForm() {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const { pushToast } = useToast();
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -18,10 +19,13 @@ export function CreateGardenForm() {
     const length = Number(form.get("length"));
     const height = Number(form.get("height"));
     if (!name || Number.isNaN(width) || Number.isNaN(length) || Number.isNaN(height)) {
-      setError("Please provide a name and numeric dimensions.");
+      pushToast({
+        title: "Garden details incomplete",
+        description: "Please provide a name and numeric dimensions before saving.",
+        variant: "error",
+      });
       return;
     }
-    setError(null);
     startTransition(async () => {
       const response = await fetch("/api/garden", {
         method: "POST",
@@ -30,10 +34,19 @@ export function CreateGardenForm() {
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({ error: "Unable to create garden" }));
-        setError(typeof data.error === "string" ? data.error : "Unable to create garden");
+        pushToast({
+          title: "Garden could not be created",
+          description: typeof data.error === "string" ? data.error : "Unable to create garden",
+          variant: "error",
+        });
         return;
       }
       formElement.reset();
+      pushToast({
+        title: "Garden created",
+        description: `${name} is ready for planning.`,
+        variant: "success",
+      });
       router.refresh();
     });
   };
@@ -86,7 +99,6 @@ export function CreateGardenForm() {
           />
         </label>
       </div>
-      {error ? <p className="text-xs text-red-500">{error}</p> : null}
       <Button type="submit" size="sm" disabled={isPending}>
         {isPending ? "Saving…" : "Create garden"}
       </Button>

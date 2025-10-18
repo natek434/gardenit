@@ -1,13 +1,13 @@
 "use client";
 
-import { FormEvent, useState, useTransition } from "react";
+import { FormEvent, useTransition } from "react";
 import { signIn } from "next-auth/react";
 import { Button } from "../ui/button";
+import { useToast } from "../ui/toast";
 
 export function SignUpForm() {
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const { pushToast } = useToast();
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -18,12 +18,13 @@ export function SignUpForm() {
     const name = String(form.get("name") ?? "").trim() || undefined;
 
     if (password !== confirm) {
-      setError("Passwords do not match.");
+      pushToast({
+        title: "Passwords do not match",
+        description: "Please enter matching passwords.",
+        variant: "error",
+      });
       return;
     }
-
-    setError(null);
-    setMessage(null);
 
     startTransition(async () => {
       const response = await fetch("/api/auth/signup", {
@@ -34,11 +35,19 @@ export function SignUpForm() {
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({ error: "Failed to create account" }));
-        setError(typeof data.error === "string" ? data.error : "Unable to create account");
+        pushToast({
+          title: "Account not created",
+          description: typeof data.error === "string" ? data.error : "Unable to create account",
+          variant: "error",
+        });
         return;
       }
 
-      setMessage("Account created! Signing you in…");
+      pushToast({
+        title: "Account created",
+        description: "Signing you in…",
+        variant: "success",
+      });
       await signIn("credentials", { email, password, redirect: true, callbackUrl: "/" });
     });
   };
@@ -95,12 +104,6 @@ export function SignUpForm() {
           className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
         />
       </div>
-      {error ? (
-        <p role="alert" className="text-sm text-red-600">
-          {error}
-        </p>
-      ) : null}
-      {message ? <p className="text-sm text-emerald-600">{message}</p> : null}
       <Button type="submit" className="w-full" disabled={isPending}>
         {isPending ? "Creating account…" : "Create account"}
       </Button>

@@ -30,6 +30,7 @@ export default async function GardenPage() {
           planting.plant.imageLocalPath ??
           resolvePlantImage(planting.plant.defaultImage as Record<string, unknown> | null),
         startDate: planting.startDate.toISOString(),
+        daysToMaturity: planting.plant.daysToMaturity ?? null,
         positionX: planting.positionX,
         positionY: planting.positionY,
       })),
