@@ -1,15 +1,31 @@
 import { prisma } from "@/src/lib/prisma";
 import { scheduleCareReminders } from "@/src/jobs/scheduler";
 
-export async function upsertGarden(userId: string, data: { id?: string; name: string; widthCm: number; heightCm: number }) {
+type GardenDimensions = { widthCm: number; lengthCm: number; heightCm?: number | null };
+
+export async function upsertGarden(
+  userId: string,
+  data: { id?: string; name: string } & GardenDimensions,
+) {
   if (data.id) {
     return prisma.garden.update({
       where: { id: data.id },
-      data: { name: data.name, widthCm: data.widthCm, heightCm: data.heightCm },
+      data: {
+        name: data.name,
+        widthCm: data.widthCm,
+        lengthCm: data.lengthCm,
+        heightCm: data.heightCm ?? null,
+      },
     });
   }
   return prisma.garden.create({
-    data: { name: data.name, widthCm: data.widthCm, heightCm: data.heightCm, userId },
+    data: {
+      name: data.name,
+      widthCm: data.widthCm,
+      lengthCm: data.lengthCm,
+      heightCm: data.heightCm ?? null,
+      userId,
+    },
   });
 }
 
@@ -77,15 +93,38 @@ export function getGardensForUser(userId: string) {
   });
 }
 
-export function createBed(gardenId: string, data: { name: string; widthCm: number; heightCm: number }) {
+export function createBed(
+  gardenId: string,
+  data: { name: string } & GardenDimensions,
+) {
   return prisma.bed.create({
     data: {
       gardenId,
       name: data.name,
       widthCm: data.widthCm,
-      heightCm: data.heightCm,
+      lengthCm: data.lengthCm,
+      heightCm: data.heightCm ?? null,
     },
   });
+}
+
+export async function deleteGarden(gardenId: string, userId: string) {
+  const garden = await prisma.garden.findFirst({
+    where: { id: gardenId, userId },
+    select: { id: true },
+  });
+  if (!garden) {
+    return null;
+  }
+
+  await prisma.$transaction([
+    prisma.reminder.deleteMany({ where: { planting: { bed: { gardenId } } } }),
+    prisma.planting.deleteMany({ where: { bed: { gardenId } } }),
+    prisma.bed.deleteMany({ where: { gardenId } }),
+    prisma.garden.delete({ where: { id: gardenId } }),
+  ]);
+
+  return gardenId;
 }
 
 export async function deleteBed(bedId: string, userId: string) {

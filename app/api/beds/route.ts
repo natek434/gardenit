@@ -8,7 +8,8 @@ const schema = z.object({
   gardenId: z.string(),
   name: z.string().min(2).max(80),
   widthCm: z.coerce.number().int().positive(),
-  heightCm: z.coerce.number().int().positive(),
+  lengthCm: z.coerce.number().int().positive(),
+  heightCm: z.coerce.number().int().positive().optional(),
 });
 
 export async function POST(request: Request) {
@@ -32,6 +33,7 @@ export async function POST(request: Request) {
   const bed = await createBed(garden.id, {
     name: parsed.data.name,
     widthCm: parsed.data.widthCm,
+    lengthCm: parsed.data.lengthCm,
     heightCm: parsed.data.heightCm,
   });
   return NextResponse.json({ bed });

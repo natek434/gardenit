@@ -14,8 +14,9 @@ export function CreateGardenForm() {
     const form = new FormData(event.currentTarget);
     const name = String(form.get("name") ?? "").trim();
     const width = Number(form.get("width"));
+    const length = Number(form.get("length"));
     const height = Number(form.get("height"));
-    if (!name || Number.isNaN(width) || Number.isNaN(height)) {
+    if (!name || Number.isNaN(width) || Number.isNaN(length) || Number.isNaN(height)) {
       setError("Please provide a name and numeric dimensions.");
       return;
     }
@@ -24,7 +25,7 @@ export function CreateGardenForm() {
       const response = await fetch("/api/garden", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, widthCm: width, heightCm: height }),
+        body: JSON.stringify({ name, widthCm: width, lengthCm: length, heightCm: height }),
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({ error: "Unable to create garden" }));
@@ -49,7 +50,7 @@ export function CreateGardenForm() {
           className="w-full rounded border border-slate-300 px-2 py-1 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
         />
       </label>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-3">
         <label className="space-y-1 text-xs font-medium text-slate-600">
           Width (cm)
           <input
@@ -62,12 +63,23 @@ export function CreateGardenForm() {
           />
         </label>
         <label className="space-y-1 text-xs font-medium text-slate-600">
-          Height (cm)
+          Length (cm)
+          <input
+            name="length"
+            type="number"
+            min={100}
+            defaultValue={600}
+            required
+            className="w-full rounded border border-slate-300 px-2 py-1 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+          />
+        </label>
+        <label className="space-y-1 text-xs font-medium text-slate-600">
+          Bed height (cm)
           <input
             name="height"
             type="number"
-            min={100}
-            defaultValue={300}
+            min={10}
+            defaultValue={40}
             required
             className="w-full rounded border border-slate-300 px-2 py-1 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
           />

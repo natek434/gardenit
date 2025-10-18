@@ -58,3 +58,29 @@ export async function removePlantFromCollection(collectionId: string, plantId: s
     where: { collectionId_plantId: { collectionId, plantId } },
   });
 }
+
+export async function renameCollection(collectionId: string, userId: string, name: string) {
+  const collection = await prisma.plantCollection.findFirst({
+    where: { id: collectionId, userId },
+    select: { id: true },
+  });
+  if (!collection) {
+    throw new Error("Collection not found");
+  }
+  return prisma.plantCollection.update({
+    where: { id: collectionId },
+    data: { name },
+  });
+}
+
+export async function deleteCollection(collectionId: string, userId: string) {
+  const collection = await prisma.plantCollection.findFirst({
+    where: { id: collectionId, userId },
+    select: { id: true },
+  });
+  if (!collection) {
+    throw new Error("Collection not found");
+  }
+  await prisma.plantCollection.delete({ where: { id: collectionId } });
+  return collectionId;
+}

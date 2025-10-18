@@ -138,13 +138,14 @@ model Companion {
 }
 
 model Garden {
-  id       String   @id @default(cuid())
-  userId   String
-  name     String
-  widthCm  Int
-  heightCm Int
-  beds     Bed[]
-  user     User     @relation(fields: [userId], references: [id])
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  widthCm   Int
+  lengthCm  Int
+  heightCm  Int?
+  beds      Bed[]
+  user      User     @relation(fields: [userId], references: [id])
 }
 
 model Bed {
@@ -152,7 +153,8 @@ model Bed {
   gardenId  String
   name      String
   widthCm   Int
-  heightCm  Int
+  lengthCm  Int
+  heightCm  Int?
   plantings Planting[]
   garden    Garden @relation(fields: [gardenId], references: [id])
 }

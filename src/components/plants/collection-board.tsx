@@ -96,6 +96,61 @@ export function CollectionBoard({ collections, plants }: CollectionBoardProps) {
     });
   };
 
+  const handleRenameCollection = () => {
+    if (!activeCollection) return;
+    const name = typeof window !== "undefined" ? window.prompt("Rename collection", activeCollection.name) : null;
+    if (!name) {
+      return;
+    }
+    const trimmed = name.trim();
+    if (trimmed.length < 2) {
+      setError("Collection name must be at least 2 characters.");
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    startTransition(async () => {
+      const response = await fetch("/api/collections", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: activeCollection.id, name: trimmed }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({ error: "Unable to rename collection" }));
+        setError(typeof data.error === "string" ? data.error : "Unable to rename collection");
+        return;
+      }
+      setMessage("Collection renamed");
+      router.refresh();
+    });
+  };
+
+  const handleDeleteCollection = () => {
+    if (!activeCollection) return;
+    if (typeof window !== "undefined") {
+      const confirmed = window.confirm("Remove this collection and all saved plants?");
+      if (!confirmed) {
+        return;
+      }
+    }
+    setError(null);
+    setMessage(null);
+    const nextCollection = collections.find((collection) => collection.id !== activeCollection.id);
+    startTransition(async () => {
+      const response = await fetch(`/api/collections?id=${encodeURIComponent(activeCollection.id)}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({ error: "Unable to remove collection" }));
+        setError(typeof data.error === "string" ? data.error : "Unable to remove collection");
+        return;
+      }
+      setMessage("Collection removed");
+      setSelectedCollectionId(nextCollection?.id ?? "");
+      router.refresh();
+    });
+  };
+
   return (
     <div className="space-y-6">
       <header className="space-y-2">
@@ -119,6 +174,26 @@ export function CollectionBoard({ collections, plants }: CollectionBoardProps) {
               ))}
             </select>
           </label>
+          {activeCollection ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleRenameCollection}
+                className="text-xs font-semibold uppercase tracking-wide text-primary"
+                disabled={isPending}
+              >
+                Rename
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteCollection}
+                className="text-xs font-semibold uppercase tracking-wide text-red-500"
+                disabled={isPending}
+              >
+                Remove
+              </button>
+            </div>
+          ) : null}
           <div className="flex items-center gap-2">
             <input
               type="text"

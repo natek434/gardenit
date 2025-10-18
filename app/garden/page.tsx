@@ -14,11 +14,13 @@ export default async function GardenPage() {
     id: garden.id,
     name: garden.name,
     widthCm: garden.widthCm,
+    lengthCm: garden.lengthCm,
     heightCm: garden.heightCm,
     beds: garden.beds.map((bed) => ({
       id: bed.id,
       name: bed.name,
       widthCm: bed.widthCm,
+      lengthCm: bed.lengthCm,
       heightCm: bed.heightCm,
       plantings: bed.plantings.map((planting) => ({
         id: planting.id,
@@ -38,6 +40,8 @@ export default async function GardenPage() {
     id: plant.id,
     name: plant.commonName,
     imageUrl: plant.imageLocalPath ?? resolvePlantImage(plant.defaultImage as Record<string, unknown> | null),
+    spacingInRowCm: plant.spacingInRowCm,
+    spacingBetweenRowsCm: plant.spacingBetweenRowsCm,
   }));
 
   return (
@@ -64,7 +68,10 @@ export default async function GardenPage() {
         {session?.user?.id ? (
           plannerGardens.length ? (
             <div className="mt-6">
-              <GardenPlanner gardens={plannerGardens} plants={plannerPlants} />
+              <div className="space-y-8">
+                <GardenPlanner gardens={plannerGardens} plants={plannerPlants} />
+                <CreateGardenForm />
+              </div>
             </div>
           ) : (
             <div className="mt-6 space-y-4">
