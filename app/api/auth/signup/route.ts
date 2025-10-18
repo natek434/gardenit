@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import { Role } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/src/lib/prisma";
 
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
       email: result.data.email,
       name: result.data.name,
       hashedPassword,
+      role: Role.USER,
       collections: {
         create: {
           name: "My plants",

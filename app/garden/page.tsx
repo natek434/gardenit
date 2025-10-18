@@ -3,11 +3,13 @@ import { auth } from "@/src/lib/auth/options";
 import { getGardensForUser } from "@/src/server/garden-service";
 import { getPlants } from "@/src/server/plant-service";
 import { GardenPlanner } from "@/src/components/garden/garden-planner";
+import { getFocusItemsByUser } from "@/src/server/focus-service";
 import { CreateGardenForm } from "@/src/components/garden/create-garden-form";
 
 export default async function GardenPage() {
   const session = await auth();
   const gardens = session?.user?.id ? await getGardensForUser(session.user.id) : [];
+  const focusItems = session?.user?.id ? await getFocusItemsByUser(session.user.id) : [];
   const plants = await getPlants();
 
   const plannerGardens = gardens.map((garden) => ({
@@ -30,6 +32,7 @@ export default async function GardenPage() {
           planting.plant.imageLocalPath ??
           resolvePlantImage(planting.plant.defaultImage as Record<string, unknown> | null),
         startDate: planting.startDate.toISOString(),
+        daysToMaturity: planting.plant.daysToMaturity ?? null,
         positionX: planting.positionX,
         positionY: planting.positionY,
       })),
@@ -42,6 +45,13 @@ export default async function GardenPage() {
     imageUrl: plant.imageLocalPath ?? resolvePlantImage(plant.defaultImage as Record<string, unknown> | null),
     spacingInRowCm: plant.spacingInRowCm,
     spacingBetweenRowsCm: plant.spacingBetweenRowsCm,
+  }));
+
+  const plannerFocus = focusItems.map((item) => ({
+    id: item.id,
+    kind: item.kind,
+    targetId: item.targetId,
+    label: item.label,
   }));
 
   return (
@@ -69,7 +79,7 @@ export default async function GardenPage() {
           plannerGardens.length ? (
             <div className="mt-6">
               <div className="space-y-8">
-                <GardenPlanner gardens={plannerGardens} plants={plannerPlants} />
+                <GardenPlanner gardens={plannerGardens} plants={plannerPlants} focusItems={plannerFocus} />
                 <CreateGardenForm />
               </div>
             </div>

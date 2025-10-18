@@ -12,12 +12,15 @@ const links: Array<{ href: string; label: string }> = [
   { href: "/plants", label: "Plants" },
   { href: "/plants/collection", label: "Collections" },
   { href: "/garden", label: "My Garden" },
+  { href: "/notifications", label: "Notifications" },
   { href: "/settings", label: "Settings" },
 ];
 
 export function Header(): ReactNode {
   const pathname = usePathname();
   const { data: session, status } = useSession();
+
+  const adminLinks = session?.user?.role === "ADMIN" ? [{ href: "/admin/plants", label: "Admin" }] : [];
 
   return (
     <header className="border-b border-slate-200 bg-white/80 backdrop-blur">
@@ -26,7 +29,7 @@ export function Header(): ReactNode {
           Gardenit
         </Link>
         <nav className="flex items-center gap-4 text-sm">
-          {links.map((link) => (
+          {[...links, ...adminLinks].map((link) => (
             <Link
               key={link.href}
               href={link.href}

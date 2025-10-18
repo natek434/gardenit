@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Role } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -443,6 +443,7 @@ async function main() {
       locationLat: -36.8485,
       locationLon: 174.7633,
       climateZoneId: "nz-north",
+      role: Role.USER,
     },
   });
 }
