@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/src/lib/auth/options";
 import { PlantAdminManager } from "@/src/components/admin/plant-admin-manager";
 import { getPlantsForAdmin } from "@/src/server/plant-service";
+import { getClimateZones } from "@/src/server/climate-service";
 
 export const metadata: Metadata = {
   title: "Plant admin | Gardenit",
@@ -17,7 +18,10 @@ export default async function AdminPlantsPage() {
     redirect("/");
   }
 
-  const plants = await getPlantsForAdmin(100);
+  const [plants, climateZones] = await Promise.all([
+    getPlantsForAdmin(100),
+    getClimateZones(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -31,7 +35,9 @@ export default async function AdminPlantsPage() {
         initialPlants={plants.map((plant) => ({
           ...plant,
           updatedAt: plant.updatedAt.toISOString(),
+          createdAt: plant.createdAt.toISOString(),
         }))}
+        climateZones={climateZones}
       />
     </div>
   );
