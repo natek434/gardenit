@@ -1,0 +1,12 @@
+{
+  "zones": [
+    {
+      "id": "nz-1",
+      "name": "NZ Zone 1 — Northern North Island",
+      "country": "NZ",
+      "frostFirst": "2024-05-01T00:00:00.000Z",
+      "frostLast": "2024-08-01T00:00:00.000Z",
+      "notes": "Subtropical north with rare frosts."
+    }
+  ]
+}
