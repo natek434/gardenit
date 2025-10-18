@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import type { DragEvent, FormEvent } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -46,6 +46,16 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
   const activeGarden = gardens.find((garden) => garden.id === selectedGardenId) ?? gardens[0];
   const activeBed =
     activeGarden?.beds.find((bed) => bed.id === selectedBedId) ?? activeGarden?.beds[0] ?? null;
+
+  useEffect(() => {
+    if (!activeGarden) {
+      setSelectedBedId("");
+      return;
+    }
+    if (!activeGarden.beds.some((bed) => bed.id === selectedBedId)) {
+      setSelectedBedId(activeGarden.beds[0]?.id ?? "");
+    }
+  }, [activeGarden, selectedBedId]);
 
   const filteredPlants = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -122,6 +132,30 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
     });
   };
 
+  const handleDeleteBed = (bedId: string) => {
+    if (!activeGarden) return;
+    if (typeof window !== "undefined") {
+      const confirmed = window.confirm("Remove this bed and all of its plantings?");
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setBedMessage(null);
+    startTransition(async () => {
+      const response = await fetch(`/api/beds?id=${encodeURIComponent(bedId)}`, { method: "DELETE" });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({ error: "Unable to remove bed" }));
+        setBedMessage(typeof data.error === "string" ? data.error : "Unable to remove bed");
+        return;
+      }
+      const nextBed = activeGarden.beds.find((bed) => bed.id !== bedId);
+      setBedMessage("Bed removed");
+      setSelectedBedId(nextBed?.id ?? "");
+      router.refresh();
+    });
+  };
+
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     if (!activeBed) return;
@@ -171,20 +205,31 @@ export function GardenPlanner({ gardens, plants }: GardenPlannerProps) {
             </select>
           </label>
           {activeGarden ? (
-            <label className="text-sm font-medium text-slate-700">
-              Bed
-              <select
-                className="ml-2 rounded border border-slate-300 px-2 py-1 text-sm"
-                value={selectedBedId}
-                onChange={(event) => setSelectedBedId(event.target.value)}
-              >
-                {activeGarden.beds.map((bed) => (
-                  <option key={bed.id} value={bed.id}>
-                    {bed.name} ({bed.widthCm}×{bed.heightCm}cm)
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-slate-700">
+                Bed
+                <select
+                  className="ml-2 rounded border border-slate-300 px-2 py-1 text-sm"
+                  value={selectedBedId}
+                  onChange={(event) => setSelectedBedId(event.target.value)}
+                >
+                  {activeGarden.beds.map((bed) => (
+                    <option key={bed.id} value={bed.id}>
+                      {bed.name} ({bed.widthCm}×{bed.heightCm}cm)
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {activeGarden.beds.length ? (
+                <button
+                  type="button"
+                  onClick={() => selectedBedId && handleDeleteBed(selectedBedId)}
+                  className="text-xs font-semibold uppercase tracking-wide text-red-500"
+                >
+                  Remove bed
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
         {activeGarden ? (

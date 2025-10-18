@@ -43,13 +43,34 @@ export async function PATCH(request: Request) {
     }
   }
 
-  const updated = await updateUserProfile(session.user.id, {
-    name: payload.name ?? null,
-    climateZoneId: payload.climateZoneId ?? null,
-    locationName: payload.locationName ?? null,
-    locationLat: payload.locationLat ?? null,
-    locationLon: payload.locationLon ?? null,
-  });
+  const profileUpdate: {
+    name?: string | null;
+    climateZoneId?: string | null;
+    locationName?: string | null;
+    locationLat?: number | null;
+    locationLon?: number | null;
+  } = {};
+
+  if ("name" in payload) {
+    profileUpdate.name = payload.name ?? null;
+  }
+  if ("climateZoneId" in payload) {
+    profileUpdate.climateZoneId = payload.climateZoneId ?? null;
+  }
+  if ("locationName" in payload) {
+    profileUpdate.locationName = payload.locationName ?? null;
+  }
+  if ("locationLat" in payload) {
+    profileUpdate.locationLat = payload.locationLat ?? null;
+  }
+  if ("locationLon" in payload) {
+    profileUpdate.locationLon = payload.locationLon ?? null;
+  }
+
+  let updated = null;
+  if (Object.keys(profileUpdate).length > 0) {
+    updated = await updateUserProfile(session.user.id, profileUpdate);
+  }
 
   return NextResponse.json({ user: updated });
 }

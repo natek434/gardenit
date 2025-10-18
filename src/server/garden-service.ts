@@ -88,6 +88,24 @@ export function createBed(gardenId: string, data: { name: string; widthCm: numbe
   });
 }
 
+export async function deleteBed(bedId: string, userId: string) {
+  const bed = await prisma.bed.findFirst({
+    where: { id: bedId, garden: { userId } },
+    select: { id: true },
+  });
+  if (!bed) {
+    return null;
+  }
+
+  await prisma.$transaction([
+    prisma.reminder.deleteMany({ where: { planting: { bedId } } }),
+    prisma.planting.deleteMany({ where: { bedId } }),
+    prisma.bed.delete({ where: { id: bedId } }),
+  ]);
+
+  return bedId;
+}
+
 export function updatePlantingLayout(
   plantingId: string,
   layout: { positionX: number; positionY: number; spanWidth?: number | null; spanHeight?: number | null },

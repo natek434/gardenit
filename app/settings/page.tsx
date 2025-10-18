@@ -1,10 +1,9 @@
 import Link from "next/link";
-import { Cloud, CloudRain, MapPin, Sun, ThermometerSun } from "lucide-react";
+import { Cloud, CloudRain, Droplet, GaugeCircle, MapPin, Navigation, Sun, ThermometerSun, Wind } from "lucide-react";
 import { auth } from "@/src/lib/auth/options";
 import { getClimateZones } from "@/src/server/climate-service";
 import { getWeatherProvider } from "@/src/lib/weather/provider";
 import { getUserProfile } from "@/src/server/user-service";
-import { Badge } from "@/src/components/ui/badge";
 import { SettingsForm } from "@/src/components/settings/settings-form";
 
 export default async function SettingsPage() {
@@ -35,41 +34,33 @@ export default async function SettingsPage() {
   let forecast: Awaited<ReturnType<typeof provider.getForecast>> = [];
   let soilTemp: number | null = null;
   let todayFrostRisk: "low" | "medium" | "high" = "low";
+  let currentConditions: Awaited<ReturnType<typeof provider.getCurrentConditions>> | null = null;
 
   if (hasLocation) {
     try {
-      forecast = await provider.getForecast(latitude, longitude);
-      soilTemp = await provider.getSoilTemp(latitude, longitude);
-      todayFrostRisk = await provider.getFrostRisk(latitude, longitude, new Date());
+      [forecast, soilTemp, todayFrostRisk, currentConditions] = await Promise.all([
+        provider.getForecast(latitude, longitude),
+        provider.getSoilTemp(latitude, longitude),
+        provider.getFrostRisk(latitude, longitude, new Date()),
+        provider.getCurrentConditions(latitude, longitude),
+      ]);
     } catch (error) {
       console.error("Weather lookup failed", error);
     }
   }
 
-  const getWeatherStyle = (rainChance: number) => {
-    if (rainChance >= 60) {
-      return {
-        tone: "bg-blue-50 border-blue-100",
-        accent: "text-blue-600",
-        Icon: CloudRain,
-        label: "Likely rain",
-      };
-    }
-    if (rainChance >= 30) {
-      return {
-        tone: "bg-slate-50 border-slate-100",
-        accent: "text-slate-600",
-        Icon: Cloud,
-        label: "Cloudy spells",
-      };
-    }
-    return {
-      tone: "bg-amber-50 border-amber-100",
-      accent: "text-amber-600",
-      Icon: Sun,
-      label: "Plenty of sun",
-    };
-  };
+  const today = forecast[0] ?? null;
+  const style = getWeatherStyle(today?.rainChance ?? 0);
+  const Icon = style.Icon;
+
+  const zoneOptions = zones.map((zone) => ({
+    id: zone.id,
+    name: zone.name,
+    country: zone.country,
+    frostFirst: zone.frostFirst ? zone.frostFirst.toISOString() : null,
+    frostLast: zone.frostLast ? zone.frostLast.toISOString() : null,
+    notes: zone.notes ?? null,
+  }));
 
   return (
     <div className="space-y-6">
@@ -78,49 +69,18 @@ export default async function SettingsPage() {
         <p className="text-sm text-slate-600">Manage your climate zone, frost preferences, and email reminders.</p>
       </header>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold">Your profile</h2>
-        <p className="mt-1 text-sm text-slate-600">Update your coordinates to personalise weather insights and sowing reminders.</p>
-        <div className="mt-4">
-          <SettingsForm user={user} zones={zones} />
-        </div>
-      </section>
+      <SettingsForm user={user} zones={zoneOptions} />
 
-      <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold">Climate zones</h2>
-        <p className="mt-1 text-sm text-slate-600">Gardenit currently focuses on New Zealand zones with global expansion planned.</p>
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          {zones.map((zone) => (
-            <div key={zone.id} className="rounded border border-slate-200 p-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-medium text-slate-800">{zone.name}</h3>
-                <Badge variant="muted">{zone.country}</Badge>
-              </div>
-              <p className="mt-2 text-xs text-slate-500">
-                Frost: {zone.frostFirst ? zone.frostFirst.toISOString().slice(0, 10) : "--"} -
-                {" "}
-                {zone.frostLast ? zone.frostLast.toISOString().slice(0, 10) : "--"}
-              </p>
-              <p className="mt-1 text-xs text-slate-500">{zone.notes ?? "No notes yet."}</p>
-            </div>
-          ))}
+      <section className={`rounded-lg border ${style.tone} p-6 shadow-sm`}>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold text-slate-800">Today&apos;s outlook</h2>
+            <p className="text-sm text-slate-600">
+              Live observations powered by Open-Meteo. Refresh your location above to refine these insights.
+            </p>
+          </div>
+          <Icon className={`h-8 w-8 ${style.accent}`} aria-hidden />
         </div>
-      </section>
-
-      <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold">7-day outlook</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Live observations provided by{" "}
-          <a
-            href="https://open-meteo.com/"
-            target="_blank"
-            rel="noreferrer"
-            className="font-semibold text-primary hover:underline"
-          >
-            Open-Meteo
-          </a>
-          . Soil and frost metrics update hourly.
-        </p>
         <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-slate-700">
           <p className="flex items-center gap-2">
             <MapPin className="h-4 w-4 text-primary" aria-hidden />
@@ -136,8 +96,7 @@ export default async function SettingsPage() {
           <p className="flex items-center gap-2">
             <ThermometerSun className="h-4 w-4 text-amber-500" aria-hidden />
             <span>
-              Soil temperature:{" "}
-              {hasLocation && soilTemp !== null && Number.isFinite(soilTemp) ? `${soilTemp.toFixed(1)}°C` : "—"}
+              Soil temperature: {hasLocation && soilTemp !== null && Number.isFinite(soilTemp) ? `${soilTemp.toFixed(1)}°C` : "—"}
             </span>
           </p>
           <p className="flex items-center gap-2">
@@ -145,46 +104,133 @@ export default async function SettingsPage() {
             <span>Frost risk today: {hasLocation ? todayFrostRisk : "—"}</span>
           </p>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {forecast.length === 0 ? (
-            <p className="text-sm text-slate-500">
-              {hasLocation
-                ? "Weather data is unavailable right now. Check your internet connection or try again soon."
-                : "Select a location above to unlock a personalised forecast."}
-            </p>
-          ) : (
-            forecast.map((day) => {
-              const style = getWeatherStyle(day.rainChance);
-              const Icon = style.Icon;
-              return (
-                <div key={day.date} className={`rounded border p-4 transition hover:shadow-sm ${style.tone}`}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-slate-800">{new Date(day.date).toDateString()}</p>
-                      <p className={`text-xs font-medium ${style.accent}`}>{style.label}</p>
-                    </div>
-                    <Icon className={`h-5 w-5 ${style.accent}`} aria-hidden />
-                  </div>
-                  <dl className="mt-3 space-y-1 text-xs text-slate-600">
-                    <div className="flex justify-between">
-                      <dt>High</dt>
-                      <dd>{Number.isFinite(day.temperatureMaxC) ? `${day.temperatureMaxC.toFixed(1)}°C` : "—"}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt>Low</dt>
-                      <dd>{Number.isFinite(day.temperatureMinC) ? `${day.temperatureMinC.toFixed(1)}°C` : "—"}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt>Rain chance</dt>
-                      <dd>{day.rainChance ?? 0}%</dd>
-                    </div>
-                  </dl>
+        <div className="mt-6">
+          {hasLocation ? (
+            today || currentConditions ? (
+              <dl className="grid gap-4 text-sm text-slate-700 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="rounded-lg border border-white/60 bg-white/70 p-4 shadow-sm">
+                  <dt className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <Sun className="h-4 w-4 text-amber-500" aria-hidden /> High
+                  </dt>
+                  <dd className="mt-2 text-lg font-semibold text-slate-800">
+                    {today && Number.isFinite(today.temperatureMaxC) ? `${today.temperatureMaxC.toFixed(1)}°C` : "—"}
+                  </dd>
                 </div>
-              );
-            })
+                <div className="rounded-lg border border-white/60 bg-white/70 p-4 shadow-sm">
+                  <dt className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <CloudRain className="h-4 w-4 text-blue-500" aria-hidden /> Rain chance
+                  </dt>
+                  <dd className="mt-2 text-lg font-semibold text-slate-800">{today ? `${today.rainChance ?? 0}%` : "—"}</dd>
+                </div>
+                <div className="rounded-lg border border-white/60 bg-white/70 p-4 shadow-sm">
+                  <dt className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <Wind className="h-4 w-4 text-sky-600" aria-hidden /> Wind speed
+                  </dt>
+                  <dd className="mt-2 text-lg font-semibold text-slate-800">
+                    {currentConditions && Number.isFinite(currentConditions.windSpeedKph)
+                      ? `${currentConditions.windSpeedKph.toFixed(1)} km/h`
+                      : "—"}
+                  </dd>
+                </div>
+                <div className="rounded-lg border border-white/60 bg-white/70 p-4 shadow-sm">
+                  <dt className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <Wind className="h-4 w-4 rotate-45 text-sky-600" aria-hidden /> Wind gust
+                  </dt>
+                  <dd className="mt-2 text-lg font-semibold text-slate-800">
+                    {currentConditions && Number.isFinite(currentConditions.windGustKph)
+                      ? `${currentConditions.windGustKph.toFixed(1)} km/h`
+                      : "—"}
+                  </dd>
+                </div>
+                <div className="rounded-lg border border-white/60 bg-white/70 p-4 shadow-sm">
+                  <dt className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <Navigation className="h-4 w-4 text-slate-600" aria-hidden /> Wind direction
+                  </dt>
+                  <dd className="mt-2 text-lg font-semibold text-slate-800">
+                    {currentConditions && Number.isFinite(currentConditions.windDirectionDeg)
+                      ? `${toCardinal(currentConditions.windDirectionDeg)} (${Math.round(currentConditions.windDirectionDeg)}°)`
+                      : "—"}
+                  </dd>
+                </div>
+                <div className="rounded-lg border border-white/60 bg-white/70 p-4 shadow-sm">
+                  <dt className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <Droplet className="h-4 w-4 text-cyan-600" aria-hidden /> Humidity
+                  </dt>
+                  <dd className="mt-2 text-lg font-semibold text-slate-800">
+                    {currentConditions && Number.isFinite(currentConditions.humidityPercent)
+                      ? `${Math.round(currentConditions.humidityPercent)}%`
+                      : "—"}
+                  </dd>
+                </div>
+                <div className="rounded-lg border border-white/60 bg-white/70 p-4 shadow-sm">
+                  <dt className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <GaugeCircle className="h-4 w-4 text-indigo-600" aria-hidden /> Pressure
+                  </dt>
+                  <dd className="mt-2 text-lg font-semibold text-slate-800">
+                    {currentConditions && Number.isFinite(currentConditions.pressureHpa)
+                      ? `${Math.round(currentConditions.pressureHpa)} hPa`
+                      : "—"}
+                  </dd>
+                </div>
+                <div className="rounded-lg border border-white/60 bg-white/70 p-4 shadow-sm">
+                  <dt className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <ThermometerSun className="h-4 w-4 text-amber-500" aria-hidden /> Feels like
+                  </dt>
+                  <dd className="mt-2 text-lg font-semibold text-slate-800">
+                    {currentConditions && Number.isFinite(currentConditions.apparentTemperatureC)
+                      ? `${currentConditions.apparentTemperatureC.toFixed(1)}°C`
+                      : "—"}
+                  </dd>
+                </div>
+                <div className="rounded-lg border border-white/60 bg-white/70 p-4 shadow-sm">
+                  <dt className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <Cloud className="h-4 w-4 text-slate-500" aria-hidden /> Overnight low
+                  </dt>
+                  <dd className="mt-2 text-lg font-semibold text-slate-800">
+                    {today && Number.isFinite(today.temperatureMinC) ? `${today.temperatureMinC.toFixed(1)}°C` : "—"}
+                  </dd>
+                </div>
+              </dl>
+            ) : (
+              <p className="text-sm text-slate-600">
+                Weather data is unavailable right now. Check your internet connection or try again soon.
+              </p>
+            )
+          ) : (
+            <p className="text-sm text-slate-600">
+              Set your location above to unlock a personalised daily forecast with wind, humidity, and pressure details.
+            </p>
           )}
         </div>
       </section>
     </div>
   );
+}
+
+function getWeatherStyle(rainChance: number) {
+  if (rainChance >= 60) {
+    return {
+      tone: "bg-blue-50 border-blue-100",
+      accent: "text-blue-600",
+      Icon: CloudRain,
+    } as const;
+  }
+  if (rainChance >= 30) {
+    return {
+      tone: "bg-slate-50 border-slate-100",
+      accent: "text-slate-600",
+      Icon: Cloud,
+    } as const;
+  }
+  return {
+    tone: "bg-amber-50 border-amber-100",
+    accent: "text-amber-600",
+    Icon: Sun,
+  } as const;
+}
+
+function toCardinal(degrees: number) {
+  const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  const index = Math.round(((degrees % 360) / 45 + 8) % 8);
+  return dirs[index];
 }

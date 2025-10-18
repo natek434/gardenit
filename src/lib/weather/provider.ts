@@ -7,10 +7,21 @@ export type ForecastDay = {
   rainChance: number;
 };
 
+export type CurrentConditions = {
+  temperatureC: number;
+  apparentTemperatureC: number;
+  humidityPercent: number;
+  pressureHpa: number;
+  windSpeedKph: number;
+  windGustKph: number;
+  windDirectionDeg: number;
+};
+
 export interface WeatherProvider {
   getForecast(lat: number, lon: number): Promise<ForecastDay[]>;
   getSoilTemp(lat: number, lon: number): Promise<number>;
   getFrostRisk(lat: number, lon: number, date: Date): Promise<"low" | "medium" | "high">;
+  getCurrentConditions(lat: number, lon: number): Promise<CurrentConditions>;
 }
 
 type OpenMeteoDailyResponse = {
@@ -26,6 +37,18 @@ type OpenMeteoHourlyResponse = {
   hourly?: {
     time: string[];
     soil_temperature_0cm?: number[];
+  };
+};
+
+type OpenMeteoCurrentResponse = {
+  current?: {
+    temperature_2m?: number;
+    apparent_temperature?: number;
+    relative_humidity_2m?: number;
+    pressure_msl?: number;
+    wind_speed_10m?: number;
+    wind_gusts_10m?: number;
+    wind_direction_10m?: number;
   };
 };
 
@@ -105,6 +128,35 @@ class OpenMeteoWeatherProvider implements WeatherProvider {
     }
     return "low";
   }
+
+  async getCurrentConditions(lat: number, lon: number): Promise<CurrentConditions> {
+    const url = new URL(OPEN_METEO_BASE_URL);
+    url.searchParams.set("latitude", lat.toString());
+    url.searchParams.set("longitude", lon.toString());
+    url.searchParams.set(
+      "current",
+      "temperature_2m,apparent_temperature,relative_humidity_2m,pressure_msl,wind_speed_10m,wind_gusts_10m,wind_direction_10m",
+    );
+    url.searchParams.set("forecast_days", "1");
+    url.searchParams.set("timezone", "auto");
+
+    const response = await fetch(url.toString(), { next: { revalidate: 60 * 15 } });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch current conditions: ${response.status}`);
+    }
+    const data = (await response.json()) as OpenMeteoCurrentResponse;
+    const current = data.current ?? {};
+
+    return {
+      temperatureC: normalise(current.temperature_2m),
+      apparentTemperatureC: normalise(current.apparent_temperature),
+      humidityPercent: normalise(current.relative_humidity_2m),
+      pressureHpa: normalise(current.pressure_msl),
+      windSpeedKph: normalise(current.wind_speed_10m),
+      windGustKph: normalise(current.wind_gusts_10m),
+      windDirectionDeg: normalise(current.wind_direction_10m),
+    };
+  }
 }
 
 let provider: WeatherProvider = new OpenMeteoWeatherProvider();
@@ -115,4 +167,8 @@ export function setWeatherProvider(custom: WeatherProvider) {
 
 export function getWeatherProvider(): WeatherProvider {
   return provider;
+}
+
+function normalise(value: number | undefined): number {
+  return typeof value === "number" ? value : Number.NaN;
 }

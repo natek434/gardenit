@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/src/lib/auth/options";
 import { prisma } from "@/src/lib/prisma";
-import { createBed } from "@/src/server/garden-service";
+import { createBed, deleteBed } from "@/src/server/garden-service";
 
 const schema = z.object({
   gardenId: z.string(),
@@ -35,4 +35,24 @@ export async function POST(request: Request) {
     heightCm: parsed.data.heightCm,
   });
   return NextResponse.json({ bed });
+}
+
+export async function DELETE(request: Request) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const bedId = searchParams.get("id");
+  if (!bedId) {
+    return NextResponse.json({ error: "Bed id is required" }, { status: 400 });
+  }
+
+  const removed = await deleteBed(bedId, session.user.id);
+  if (!removed) {
+    return NextResponse.json({ error: "Bed not found" }, { status: 404 });
+  }
+
+  return NextResponse.json({ ok: true });
 }
