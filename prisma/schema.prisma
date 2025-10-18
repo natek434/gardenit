@@ -11,6 +11,8 @@ model User {
   id            String   @id @default(cuid())
   email         String   @unique
   name          String?
+  hashedPassword String?
+  locationName  String?
   locationLat   Float?
   locationLon   Float?
   climateZoneId String?
@@ -19,6 +21,7 @@ model User {
   reminders     Reminder[]
   accounts      Account[]
   sessions      Session[]
+  collections   PlantCollection[]
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
@@ -105,6 +108,7 @@ model Plant {
   antagonists             Companion[] @relation("CompanionsB")
   climateWindows          ClimatePlantWindow[]
   plantings               Planting[]
+  collections             CollectionPlant[]
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 }
@@ -160,9 +164,36 @@ model Planting {
   startDate  DateTime
   quantity   Int?
   notes      String?
+  positionX  Float?
+  positionY  Float?
+  spanWidth  Float?
+  spanHeight Float?
   bed        Bed    @relation(fields: [bedId], references: [id])
   plant      Plant  @relation(fields: [plantId], references: [id])
   reminders  Reminder[]
+}
+
+model PlantCollection {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  notes     String?
+  plants    CollectionPlant[]
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CollectionPlant {
+  id            String          @id @default(cuid())
+  collectionId  String
+  plantId       String
+  notes         String?
+  addedAt       DateTime        @default(now())
+  collection    PlantCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  plant         Plant           @relation(fields: [plantId], references: [id])
+
+  @@unique([collectionId, plantId])
 }
 
 model Reminder {

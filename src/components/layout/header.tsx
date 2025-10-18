@@ -10,6 +10,7 @@ import { Button } from "../ui/button";
 const links: Array<{ href: string; label: string }> = [
   { href: "/", label: "Home" },
   { href: "/plants", label: "Plants" },
+  { href: "/plants/collection", label: "Collections" },
   { href: "/garden", label: "My Garden" },
   { href: "/settings", label: "Settings" },
 ];
