@@ -35,6 +35,7 @@ export default async function GardenPage() {
         daysToMaturity: planting.plant.daysToMaturity ?? null,
         positionX: planting.positionX,
         positionY: planting.positionY,
+        notes: planting.notes ?? null,
       })),
     })),
   }));

@@ -25,6 +25,7 @@ const demoGardens = [
             daysToMaturity: 60,
             positionX: 100,
             positionY: 150,
+            notes: "Trialing early spring lettuce here.",
           },
           {
             id: "edge-nw",
@@ -35,6 +36,7 @@ const demoGardens = [
             daysToMaturity: 50,
             positionX: 5,
             positionY: 5,
+            notes: null,
           },
           {
             id: "edge-ne",
@@ -45,6 +47,7 @@ const demoGardens = [
             daysToMaturity: 55,
             positionX: 195,
             positionY: 5,
+            notes: null,
           },
           {
             id: "edge-sw",
@@ -55,6 +58,7 @@ const demoGardens = [
             daysToMaturity: 52,
             positionX: 5,
             positionY: 295,
+            notes: null,
           },
           {
             id: "edge-se",
@@ -65,6 +69,7 @@ const demoGardens = [
             daysToMaturity: 58,
             positionX: 195,
             positionY: 295,
+            notes: null,
           },
         ],
       },

@@ -28,6 +28,7 @@ const baseContext = {
       daysToMaturity: 80,
       positionX: 100,
       positionY: 120,
+      notes: null,
       plant: { id: "plant-1", commonName: "Tomato", daysToMaturity: 80, category: "Fruit" },
       bed: { id: "bed-1", name: "North Bed", garden: { id: "garden-1", name: "Kitchen" } },
     },

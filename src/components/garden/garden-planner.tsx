@@ -28,6 +28,7 @@ type PlannerPlanting = {
   daysToMaturity: number | null;
   positionX: number | null;
   positionY: number | null;
+  notes: string | null;
 };
 
 type PlannerBed = {
@@ -360,27 +361,48 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus }: Gar
     });
   };
 
-  const handleUpdatePlantingStartDate = (plantingId: string, startDate: string) => {
+  const handleUpdatePlantingDetails = (
+    plantingId: string,
+    updates: { startDate?: string; notes?: string },
+  ) => {
+    if (!updates.startDate && updates.notes === undefined) {
+      return;
+    }
     startTransition(async () => {
       const response = await fetch("/api/plantings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: plantingId, startDate }),
+        body: JSON.stringify({ id: plantingId, ...updates }),
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({ error: "Unable to update plant date" }));
         pushToast({
-          title: "Could not update plant date",
-          description: typeof data.error === "string" ? data.error : "Unable to update plant date",
+          title: "Could not update planting",
+          description: typeof data.error === "string" ? data.error : "Unable to update planting",
           variant: "error",
         });
         return;
       }
-      pushToast({
-        title: "Plant date updated",
-        description: "Reminder schedules have been refreshed.",
-        variant: "success",
-      });
+      const updatedStart = Boolean(updates.startDate);
+      const updatedNotes = updates.notes !== undefined;
+      const hasNotes = typeof updates.notes === "string" && updates.notes.length > 0;
+      let title = "Planting updated";
+      let description = "Your changes have been saved.";
+      if (updatedStart && updatedNotes) {
+        title = "Plant date & notes updated";
+        description = hasNotes
+          ? "Reminder schedules refreshed and notes saved."
+          : "Reminder schedules refreshed and notes cleared.";
+      } else if (updatedStart) {
+        title = "Plant date updated";
+        description = "Reminder schedules have been refreshed.";
+      } else if (updatedNotes) {
+        title = hasNotes ? "Notes saved" : "Notes cleared";
+        description = hasNotes
+          ? "We'll keep these details attached to this planting."
+          : "The planting no longer has any notes.";
+      }
+      pushToast({ title, description, variant: "success" });
       router.refresh();
     });
   };
@@ -973,7 +995,7 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus }: Gar
                       topPercent={topPercent}
                       iconSize={bedIconSizePx}
                       onDelete={handleDeletePlanting}
-                      onUpdateStartDate={handleUpdatePlantingStartDate}
+                      onUpdateDetails={handleUpdatePlantingDetails}
                       onToggleFocus={() => toggleFocus("planting", planting.id, planting.plantName)}
                       isFocused={isPlantingFocused}
                       dimmed={!isPlantingFocused && focusItems.length > 0 && !showFocusOnly}
@@ -1161,7 +1183,7 @@ type PlantingMarkerProps = {
   topPercent: number;
   iconSize: number;
   onDelete: (id: string) => void;
-  onUpdateStartDate: (id: string, startDate: string) => void;
+  onUpdateDetails: (id: string, updates: { startDate?: string; notes?: string }) => void;
   onToggleFocus: () => void;
   isFocused: boolean;
   dimmed: boolean;
@@ -1180,7 +1202,7 @@ function PlantingMarker({
   topPercent,
   iconSize,
   onDelete,
-  onUpdateStartDate,
+  onUpdateDetails,
   onToggleFocus,
   isFocused,
   dimmed,
@@ -1193,6 +1215,7 @@ function PlantingMarker({
 }: PlantingMarkerProps) {
   const startDate = useMemo(() => new Date(planting.startDate), [planting.startDate]);
   const [draftDate, setDraftDate] = useState(startDate.toISOString().slice(0, 10));
+  const [notes, setNotes] = useState(planting.notes ?? "");
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
   const markerRef = useRef<HTMLDivElement | null>(null);
@@ -1202,6 +1225,10 @@ function PlantingMarker({
   useEffect(() => {
     setDraftDate(startDate.toISOString().slice(0, 10));
   }, [startDate]);
+
+  useEffect(() => {
+    setNotes(planting.notes ?? "");
+  }, [planting.notes]);
 
   const harvestDate = useMemo(() => {
     if (!planting.daysToMaturity) return null;
@@ -1292,14 +1319,26 @@ function PlantingMarker({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!draftDate) {
+    const updates: { startDate?: string; notes?: string } = {};
+
+    if (draftDate) {
+      const iso = new Date(`${draftDate}T00:00:00`).toISOString();
+      if (iso !== planting.startDate) {
+        updates.startDate = iso;
+      }
+    }
+
+    const trimmedNotes = notes.trim();
+    const previousNotes = (planting.notes ?? "").trim();
+    if (trimmedNotes !== previousNotes) {
+      updates.notes = trimmedNotes;
+      setNotes(trimmedNotes);
+    }
+
+    if (!updates.startDate && updates.notes === undefined) {
       return;
     }
-    const iso = new Date(`${draftDate}T00:00:00`).toISOString();
-    if (iso === planting.startDate) {
-      return;
-    }
-    onUpdateStartDate(planting.id, iso);
+    onUpdateDetails(planting.id, updates);
   };
 
   const preview = useMemo(
@@ -1424,13 +1463,29 @@ function PlantingMarker({
                     className="w-full rounded border border-slate-300 px-2 py-1 text-xs focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
                   />
                 </label>
+                <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+                  Plant notes
+                  <textarea
+                    value={notes}
+                    onChange={(event) => setNotes(event.target.value)}
+                    rows={3}
+                    placeholder="Add observations for this spot"
+                    disabled={isPending}
+                    className="w-full rounded border border-slate-300 px-2 py-1 text-xs leading-relaxed focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                  <span className="text-[10px] font-normal uppercase tracking-wide text-slate-400">
+                    {planting.notes
+                      ? "Update or clear notes specific to this spot."
+                      : "Notes stay with this planting on the bed."}
+                  </span>
+                </label>
                 <div className="flex items-center justify-between gap-2">
                   <button
                     type="submit"
                     disabled={isPending}
                     className="rounded bg-primary px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white transition disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Save date
+                    Save changes
                   </button>
                   <button
                     type="button"

@@ -7,20 +7,23 @@ import classNames from "classnames";
 import { useSession, signOut } from "next-auth/react";
 import { Button } from "../ui/button";
 
-const links: Array<{ href: string; label: string }> = [
-  { href: "/", label: "Home" },
-  { href: "/plants", label: "Plants" },
-  { href: "/plants/collection", label: "Collections" },
-  { href: "/garden", label: "My Garden" },
-  { href: "/notifications", label: "Notifications" },
-  { href: "/settings", label: "Settings" },
-];
-
 export function Header(): ReactNode {
   const pathname = usePathname();
   const { data: session, status } = useSession();
 
-  const adminLinks = session?.user?.role === "ADMIN" ? [{ href: "/admin/plants", label: "Admin" }] : [];
+  const navLinks: Array<{ href: string; label: string }> = [
+    { href: "/", label: "Home" },
+    { href: "/plants", label: "Plants" },
+    { href: "/plants/collection", label: "Collections" },
+    { href: "/garden", label: "My Garden" },
+    { href: "/notifications", label: "Notifications" },
+  ];
+
+  if (session?.user?.role === "ADMIN") {
+    navLinks.push({ href: "/admin/plants", label: "Admin" });
+  }
+
+  navLinks.push({ href: "/settings", label: "Settings" });
 
   return (
     <header className="border-b border-slate-200 bg-white/80 backdrop-blur">
@@ -29,18 +32,22 @@ export function Header(): ReactNode {
           Gardenit
         </Link>
         <nav className="flex items-center gap-4 text-sm">
-          {[...links, ...adminLinks].map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={classNames("rounded px-3 py-1 transition", {
-                "bg-primary text-white": pathname === link.href,
-                "text-slate-600 hover:bg-slate-100": pathname !== link.href,
-              })}
-            >
-              {link.label}
-            </Link>
-          ))}
+          {navLinks.map((link) => {
+            const isActive =
+              pathname === link.href || (link.href !== "/" && pathname.startsWith(`${link.href}/`));
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={classNames("rounded px-3 py-1 transition", {
+                  "bg-primary text-white": isActive,
+                  "text-slate-600 hover:bg-slate-100": !isActive,
+                })}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
           {status === "loading" ? null : session?.user ? (
             <Button
               type="button"
