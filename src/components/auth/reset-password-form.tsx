@@ -1,14 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useState, useTransition } from "react";
+import { FormEvent, useTransition } from "react";
 import { Button } from "../ui/button";
+import { useToast } from "../ui/toast";
 
 export function ResetPasswordClientForm({ token }: { token: string }) {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const { pushToast } = useToast();
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -17,12 +17,13 @@ export function ResetPasswordClientForm({ token }: { token: string }) {
     const confirm = String(form.get("confirm") ?? "");
 
     if (password !== confirm) {
-      setError("Passwords do not match.");
+      pushToast({
+        title: "Passwords do not match",
+        description: "Please confirm the same password in both fields.",
+        variant: "error",
+      });
       return;
     }
-
-    setError(null);
-    setMessage(null);
 
     startTransition(async () => {
       const response = await fetch("/api/auth/reset-password", {
@@ -33,11 +34,19 @@ export function ResetPasswordClientForm({ token }: { token: string }) {
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({ error: "Unable to reset password" }));
-        setError(typeof data.error === "string" ? data.error : "Unable to reset password");
+        pushToast({
+          title: "Password not updated",
+          description: typeof data.error === "string" ? data.error : "Unable to reset password",
+          variant: "error",
+        });
         return;
       }
 
-      setMessage("Password updated. Redirecting to sign in…");
+      pushToast({
+        title: "Password updated",
+        description: "Redirecting you to sign in…",
+        variant: "success",
+      });
       setTimeout(() => {
         router.push("/auth/signin");
       }, 1500);
@@ -72,12 +81,6 @@ export function ResetPasswordClientForm({ token }: { token: string }) {
           className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
         />
       </div>
-      {error ? (
-        <p className="text-sm text-red-600" role="alert">
-          {error}
-        </p>
-      ) : null}
-      {message ? <p className="text-sm text-emerald-600">{message}</p> : null}
       <Button type="submit" className="w-full" disabled={isPending}>
         {isPending ? "Updating password…" : "Update password"}
       </Button>
