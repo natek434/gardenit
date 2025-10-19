@@ -76,6 +76,19 @@ The Prisma schema (see `prisma/schema.prisma`) models users, plants, planting wi
 
 The helper script automatically matches species by common name, fetches full detail payloads, and maps them to the extended Prisma schema. Any plants that cannot be matched are reported at the end so you can refine the target list or adjust the search term. The script is idempotent—rerunning it keeps data in sync with Perenual updates.
 
+For day-to-day upkeep without exhausting your API quota, use the incremental sync helper:
+
+```
+pnpm perenual:sync
+```
+
+The command checks which of the 100 targets are missing Perenual details in your database, fetches only the gaps, and records two sets of outcomes in `data/perenual-sync-log.json`:
+
+- `missingData` — plants that Perenual doesn't currently expose, so future runs skip them until you delete the log entry.
+- `apiLimit` — plants skipped after rate-limit errors. Entries include a timestamp so the next run in the same day won't re-issue the request.
+
+Successful imports clear any existing log entries automatically.
+
 Gardenit reads the following Perenual endpoints:
 
 - `GET /api/species-list` for initial IDs filtered by the names in `perenual-targets.ts`
