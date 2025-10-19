@@ -97,7 +97,7 @@ async function loadFile(filePath: string) {
 function toPlantPayload(input: z.infer<typeof PlantInputSchema>, imageLocalPath: string | null): Prisma.PlantUncheckedCreateInput {
   const wateringGeneralBenchmark = input.waterBenchmarkValue
     ? { value: input.waterBenchmarkValue, unit: input.waterBenchmarkUnit ?? null }
-    : null;
+    : Prisma.JsonNull;
 
   return {
     perenualId: input.perenualId ?? null,
@@ -116,15 +116,15 @@ function toPlantPayload(input: z.infer<typeof PlantInputSchema>, imageLocalPath:
     waterGeneral: input.waterGeneral,
     watering: input.watering ?? null,
     wateringGeneralBenchmark,
-    plantAnatomy: null,
+    plantAnatomy: Prisma.JsonNull,
     pruningMonth: input.pruningMonth ?? [],
-    pruningCount: null,
+    pruningCount: Prisma.JsonNull,
     seeds: input.seeds ?? null,
     attracts: input.attracts ?? [],
     propagationMethods: input.propagationMethods ?? [],
     hardinessMin: null,
     hardinessMax: null,
-    hardinessLocation: null,
+    hardinessLocation: Prisma.JsonNull,
     flowers: null,
     floweringSeason: null,
     cones: null,
@@ -152,16 +152,16 @@ function toPlantPayload(input: z.infer<typeof PlantInputSchema>, imageLocalPath:
     careLevel: input.careLevel ?? null,
     careNotes: summarise(input.careNotes),
     description: input.description ?? null,
-    defaultImage: imageLocalPath ? { localPath: imageLocalPath } : null,
-    otherImages: null,
+    defaultImage: imageLocalPath ? { localPath: imageLocalPath } : Prisma.JsonNull,
+    otherImages: Prisma.JsonNull,
     imageLocalPath,
     wateringQuality: [],
     wateringPeriod: [],
-    wateringAvgVolume: null,
-    wateringDepth: null,
-    wateringBasedTemperature: null,
-    wateringPhLevel: null,
-    sunlightDuration: null,
+    wateringAvgVolume: Prisma.JsonNull,
+    wateringDepth: Prisma.JsonNull,
+    wateringBasedTemperature: Prisma.JsonNull,
+    wateringPhLevel: Prisma.JsonNull,
+    sunlightDuration: Prisma.JsonNull,
     sowDepthMm: null,
     spacingInRowCm: null,
     spacingBetweenRowsCm: null,
@@ -175,9 +175,9 @@ async function upsertClimateWindows(plantId: string, windows: z.infer<typeof Cli
     data: windows.map((window) => ({
       plantId,
       climateZoneId: window.climateZoneId,
-      sowIndoors: window.sowIndoors ?? null,
-      sowOutdoors: window.sowOutdoors ?? null,
-      transplant: window.transplant ?? null,
+      sowIndoors: window.sowIndoors ?? Prisma.JsonNull,
+      sowOutdoors: window.sowOutdoors ?? Prisma.JsonNull,
+      transplant: window.transplant ?? Prisma.JsonNull,
       notes: window.notes ?? null,
     })),
   });

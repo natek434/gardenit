@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PlantWithRelations } from "@/src/server/plant-service";
 import { Badge } from "../ui/badge";
 import { PlantActions } from "./plant-actions";
+import { FocusToggle } from "@/src/components/focus/focus-toggle";
 
 type PlantImage = {
   original_url?: string;
@@ -11,7 +12,15 @@ type PlantImage = {
   thumbnail?: string;
 };
 
-export function PlantDetail({ plant, collections }: { plant: PlantWithRelations; collections?: Array<{ id: string; name: string }> }) {
+export function PlantDetail({
+  plant,
+  collections,
+  focusId,
+}: {
+  plant: PlantWithRelations;
+  collections?: Array<{ id: string; name: string }>;
+  focusId?: string | null;
+}) {
   const defaultImage = (plant.defaultImage as PlantImage | (PlantImage & { localPath?: string }) | null) ?? null;
   const defaultImageUrl =
     plant.imageLocalPath ??
@@ -56,10 +65,18 @@ export function PlantDetail({ plant, collections }: { plant: PlantWithRelations;
               <h1 className="text-2xl font-semibold">{plant.commonName}</h1>
               <p className="text-sm text-slate-500">{plant.scientificName}</p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="muted">{plant.category}</Badge>
-              {plant.cycle ? <Badge variant="muted">{plant.cycle}</Badge> : null}
-              {plant.careLevel ? <Badge variant="muted">Care: {plant.careLevel}</Badge> : null}
+            <div className="flex flex-wrap items-center gap-3">
+              <FocusToggle
+                kind="plant"
+                targetId={plant.id}
+                initialFocusId={focusId ?? undefined}
+                label={plant.commonName}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="muted">{plant.category}</Badge>
+                {plant.cycle ? <Badge variant="muted">{plant.cycle}</Badge> : null}
+                {plant.careLevel ? <Badge variant="muted">Care: {plant.careLevel}</Badge> : null}
+              </div>
             </div>
           </div>
           {collections ? (

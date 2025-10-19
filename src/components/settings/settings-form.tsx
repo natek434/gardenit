@@ -386,7 +386,7 @@ export function SettingsForm({ user, zones }: SettingsFormProps) {
               <details
                 key={group.country}
                 className="rounded border border-slate-200 bg-slate-50 p-4"
-                defaultOpen={group.zones.some((zone) => zone.id === selectedClimateId)}
+                open={group.zones.some((zone) => zone.id === selectedClimateId)}
               >
                 <summary className="cursor-pointer text-sm font-semibold text-slate-700">
                   {group.country}
