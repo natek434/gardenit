@@ -38,6 +38,7 @@ export default async function HomePage() {
       latitude = profile.locationLat;
       longitude = profile.locationLon;
       locationName = profile.locationName ?? "Custom coordinates";
+      zone = profile.climateZone?.name ?? locationName;
       try {
         [forecast, soilTemp, todayFrostRisk, currentConditions] = await Promise.all([
           provider.getForecast(profile.locationLat, profile.locationLon),
@@ -207,7 +208,7 @@ export default async function HomePage() {
 
       <section className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Sow now in your zone</h2>
+          <h2 className="text-xl font-semibold">Plant now in {zone}</h2>
           <Link href="/plants" className="text-sm text-primary hover:underline">
             View all plants
           </Link>
