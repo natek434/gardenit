@@ -3,7 +3,7 @@ import { ReactNode } from "react";
 
 type BadgeProps = {
   children: ReactNode;
-  variant?: "success" | "warning" | "danger" | "muted";
+  variant?: "success" | "warning" | "danger" | "muted" | "outline";
 };
 
 export function Badge({ children, variant = "muted" }: BadgeProps) {
@@ -16,6 +16,7 @@ export function Badge({ children, variant = "muted" }: BadgeProps) {
           "bg-amber-100 text-amber-700": variant === "warning",
           "bg-rose-100 text-rose-700": variant === "danger",
           "bg-slate-100 text-slate-600": variant === "muted",
+          "border border-slate-300 text-slate-700": variant === "outline",
         },
       )}
     >
