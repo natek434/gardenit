@@ -11,6 +11,7 @@ const postSchema = z.object({
     .refine((date) => !Number.isNaN(date.getTime()), "Invalid date"),
   cadence: z.string().optional(),
   type: z.string(),
+  details: z.string().optional(),
 });
 
 const querySchema = z.object({
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
     dueAt: result.data.dueAt,
     cadence: result.data.cadence,
     type: result.data.type,
+    details: result.data.details,
   });
   return NextResponse.json({ reminder });
 }

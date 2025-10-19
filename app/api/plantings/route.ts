@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/src/lib/auth/options";
-import { createPlanting, deletePlanting, getPlantingsByUser, updatePlantingLayout } from "@/src/server/garden-service";
+import {
+  createPlanting,
+  deletePlanting,
+  getPlantingsByUser,
+  updatePlantingDetails,
+  updatePlantingLayout,
+} from "@/src/server/garden-service";
 
 const placementSchema = z.object({
   positionX: z.number().finite(),
@@ -100,13 +106,29 @@ export async function GET(request: Request) {
   return NextResponse.json({ plantings });
 }
 
-const patchSchema = z.object({
-  id: z.string(),
-  positionX: z.number().finite(),
-  positionY: z.number().finite(),
-  spanWidth: z.number().finite().positive().optional(),
-  spanHeight: z.number().finite().positive().optional(),
-});
+const patchSchema = z
+  .object({
+    id: z.string(),
+    positionX: z.number().finite().optional(),
+    positionY: z.number().finite().optional(),
+    spanWidth: z.number().finite().positive().optional(),
+    spanHeight: z.number().finite().positive().optional(),
+    startDate: z
+      .string()
+      .transform((value) => new Date(value))
+      .refine((date) => !Number.isNaN(date.getTime()), "Invalid date")
+      .optional(),
+    quantity: z.coerce.number().int().positive().optional(),
+    notes: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      const hasPosition = typeof data.positionX === "number" && typeof data.positionY === "number";
+      const hasDetails = data.startDate || typeof data.quantity === "number" || typeof data.notes === "string";
+      return hasPosition || hasDetails;
+    },
+    { message: "Provide fields to update", path: ["id"] },
+  );
 
 export async function PATCH(request: Request) {
   const session = await auth();
@@ -118,11 +140,21 @@ export async function PATCH(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.format() }, { status: 400 });
   }
-  const planting = await updatePlantingLayout(parsed.data.id, {
-    positionX: parsed.data.positionX,
-    positionY: parsed.data.positionY,
-    spanWidth: parsed.data.spanWidth,
-    spanHeight: parsed.data.spanHeight,
+  const hasPosition = typeof parsed.data.positionX === "number" && typeof parsed.data.positionY === "number";
+  if (hasPosition) {
+    const planting = await updatePlantingLayout(parsed.data.id, {
+      positionX: parsed.data.positionX!,
+      positionY: parsed.data.positionY!,
+      spanWidth: parsed.data.spanWidth,
+      spanHeight: parsed.data.spanHeight,
+    });
+    return NextResponse.json({ planting });
+  }
+
+  const planting = await updatePlantingDetails(parsed.data.id, {
+    startDate: parsed.data.startDate,
+    quantity: parsed.data.quantity,
+    notes: parsed.data.notes,
   });
   return NextResponse.json({ planting });
 }

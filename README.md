@@ -35,6 +35,10 @@ Demo authentication credentials:
 - Email: `demo@gardenit.nz`
 - Password: `gardenit`
 
+### Usage guide
+
+See [`docs/USAGE.md`](docs/USAGE.md) for a walkthrough of core workflows, administrator tooling, and planting window maintenance tips.
+
 ### Testing & Quality
 
 ```bash
