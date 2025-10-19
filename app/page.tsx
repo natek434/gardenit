@@ -30,6 +30,7 @@ export default async function HomePage() {
   let soilTemp: number | null = null;
   let todayFrostRisk: "low" | "medium" | "high" = "low";
   let currentConditions: Awaited<ReturnType<typeof provider.getCurrentConditions>> | null = null;
+  let zone: string = ""; 
 
   if (session?.user?.id) {
     const profile = await getUserProfile(session.user.id);
@@ -71,6 +72,24 @@ export default async function HomePage() {
             <Button variant="secondary">Plan your beds</Button>
           </Link>
         </div>
+      </section>
+
+            <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Plant now in {zone}</h2>
+          <Link href="/plants" className="text-sm text-primary hover:underline">
+            View all plants
+          </Link>
+        </div>
+        {sowNow.length ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {sowNow.map((plant) => (
+              <PlantCard key={plant.id} plant={plant} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-600">No immediate sowing opportunities. Check back soon!</p>
+        )}
       </section>
 
       <section className={`rounded-xl border ${todayStyle.tone} bg-white p-6 shadow-sm`}>
@@ -206,23 +225,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Plant now in {zone}</h2>
-          <Link href="/plants" className="text-sm text-primary hover:underline">
-            View all plants
-          </Link>
-        </div>
-        {sowNow.length ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {sowNow.map((plant) => (
-              <PlantCard key={plant.id} plant={plant} />
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-slate-600">No immediate sowing opportunities. Check back soon!</p>
-        )}
-      </section>
+
 
       <section className="space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
