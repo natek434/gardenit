@@ -5,6 +5,10 @@ export function getClimateZones() {
     select: {
       id: true,
       name: true,
+      country: true,
+      frostFirst: true,
+      frostLast: true,
+      notes: true,
     },
     orderBy: { name: "asc" },
   });

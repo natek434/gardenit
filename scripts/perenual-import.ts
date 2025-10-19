@@ -98,6 +98,8 @@ const API_KEY = process.env.PERENUAL_API_KEY;
 
 const prisma = new PrismaClient();
 
+const toJson = (value: unknown): Prisma.InputJsonValue => value as Prisma.InputJsonValue;
+
 async function fetchJson<T>(url: URL): Promise<T> {
   const response = await fetch(url, { headers: { Accept: "application/json" } });
   if (!response.ok) {
@@ -192,16 +194,17 @@ function toPlantPayload(
     soilPreferences: soilList,
     waterGeneral: detail.watering ?? "Not specified",
     watering: detail.watering ?? null,
-    wateringGeneralBenchmark: detail.watering_general_benchmark ?? null,
-    plantAnatomy: detail.plant_anatomy ?? null,
+    wateringGeneralBenchmark:
+      detail.watering_general_benchmark != null ? toJson(detail.watering_general_benchmark) : Prisma.JsonNull,
+    plantAnatomy: detail.plant_anatomy != null ? toJson(detail.plant_anatomy) : Prisma.JsonNull,
     pruningMonth,
-    pruningCount: detail.pruning_count ?? null,
+    pruningCount: detail.pruning_count != null ? toJson(detail.pruning_count) : Prisma.JsonNull,
     seeds: detail.seeds ?? null,
     attracts,
     propagationMethods: propagation,
     hardinessMin: detail.hardiness?.min ?? null,
     hardinessMax: detail.hardiness?.max ?? null,
-    hardinessLocation: detail.hardiness_location ?? null,
+    hardinessLocation: detail.hardiness_location != null ? toJson(detail.hardiness_location) : Prisma.JsonNull,
     flowers: detail.flowers ?? null,
     floweringSeason: detail.flowering_season ?? null,
     cones: detail.cones ?? null,
@@ -230,19 +233,21 @@ function toPlantPayload(
     careNotes: summarise(detail.description),
     description: detail.description ?? null,
     defaultImage: detail.default_image
-      ? { ...detail.default_image, localPath: imageLocalPath ?? undefined }
+      ? toJson({ ...detail.default_image, localPath: imageLocalPath ?? undefined })
       : imageLocalPath
-        ? { localPath: imageLocalPath }
-        : null,
-    otherImages: detail.other_images ?? null,
+        ? toJson({ localPath: imageLocalPath })
+        : Prisma.JsonNull,
+    otherImages: detail.other_images != null ? toJson(detail.other_images) : Prisma.JsonNull,
     imageLocalPath,
     wateringQuality,
     wateringPeriod,
-    wateringAvgVolume: detail.xWateringAvgVolumeRequirement ?? null,
-    wateringDepth: detail.xWateringDepthRequirement ?? null,
-    wateringBasedTemperature: detail.xWateringBasedTemperature ?? null,
-    wateringPhLevel: detail.xWateringPhLevel ?? null,
-    sunlightDuration: detail.xSunlightDuration ?? null,
+    wateringAvgVolume:
+      detail.xWateringAvgVolumeRequirement != null ? toJson(detail.xWateringAvgVolumeRequirement) : Prisma.JsonNull,
+    wateringDepth: detail.xWateringDepthRequirement != null ? toJson(detail.xWateringDepthRequirement) : Prisma.JsonNull,
+    wateringBasedTemperature:
+      detail.xWateringBasedTemperature != null ? toJson(detail.xWateringBasedTemperature) : Prisma.JsonNull,
+    wateringPhLevel: detail.xWateringPhLevel != null ? toJson(detail.xWateringPhLevel) : Prisma.JsonNull,
+    sunlightDuration: detail.xSunlightDuration != null ? toJson(detail.xSunlightDuration) : Prisma.JsonNull,
     sowDepthMm: null,
     spacingInRowCm: null,
     spacingBetweenRowsCm: null,
