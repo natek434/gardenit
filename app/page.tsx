@@ -30,6 +30,7 @@ export default async function HomePage() {
   let soilTemp: number | null = null;
   let todayFrostRisk: "low" | "medium" | "high" = "low";
   let currentConditions: Awaited<ReturnType<typeof provider.getCurrentConditions>> | null = null;
+  let zone: string | null = null;
 
   if (session?.user?.id) {
     const profile = await getUserProfile(session.user.id);
