@@ -124,7 +124,7 @@ export default async function HomePage() {
           <p className="flex items-center gap-2">
             <ThermometerSun className="h-4 w-4 text-amber-500" aria-hidden />
             <span>
-              Soil temperature: {hasLocation && soilTemp !== null && Number.isFinite(soilTemp) ? `${soilTemp.toFixed(1)}°C` : "—"}
+              Soil temperature: {hasLocation && soilTemp !== null ? formatTemp(soilTemp) : "—"}
             </span>
           </p>
           <p className="flex items-center gap-2">
@@ -141,7 +141,7 @@ export default async function HomePage() {
                     <Sun className="h-4 w-4 text-amber-500" aria-hidden /> High
                   </dt>
                   <dd className="mt-2 text-lg font-semibold text-slate-800">
-                    {today && Number.isFinite(today.temperatureMaxC) ? `${today.temperatureMaxC.toFixed(1)}°C` : "—"}
+                    {formatTemp(today?.temperatureMaxC ?? Number.NaN)}
                   </dd>
                 </div>
                 <div className="rounded-lg border border-white/60 bg-white/70 p-4 shadow-sm">
@@ -155,9 +155,7 @@ export default async function HomePage() {
                     <Wind className="h-4 w-4 text-sky-600" aria-hidden /> Wind speed
                   </dt>
                   <dd className="mt-2 text-lg font-semibold text-slate-800">
-                    {currentConditions && Number.isFinite(currentConditions.windSpeedKph)
-                      ? `${currentConditions.windSpeedKph.toFixed(1)} km/h`
-                      : "—"}
+                    {formatWind(currentConditions?.windSpeedKph ?? Number.NaN)}
                   </dd>
                 </div>
                 <div className="rounded-lg border border-white/60 bg-white/70 p-4 shadow-sm">
@@ -165,9 +163,7 @@ export default async function HomePage() {
                     <Wind className="h-4 w-4 rotate-45 text-sky-600" aria-hidden /> Wind gust
                   </dt>
                   <dd className="mt-2 text-lg font-semibold text-slate-800">
-                    {currentConditions && Number.isFinite(currentConditions.windGustKph)
-                      ? `${currentConditions.windGustKph.toFixed(1)} km/h`
-                      : "—"}
+                    {formatWind(currentConditions?.windGustKph ?? Number.NaN)}
                   </dd>
                 </div>
                 <div className="rounded-lg border border-white/60 bg-white/70 p-4 shadow-sm">
@@ -195,9 +191,7 @@ export default async function HomePage() {
                     <GaugeCircle className="h-4 w-4 text-indigo-600" aria-hidden /> Pressure
                   </dt>
                   <dd className="mt-2 text-lg font-semibold text-slate-800">
-                    {currentConditions && Number.isFinite(currentConditions.pressureHpa)
-                      ? `${Math.round(currentConditions.pressureHpa)} hPa`
-                      : "—"}
+                    {formatPress(currentConditions?.pressureHpa ?? Number.NaN)}
                   </dd>
                 </div>
                 <div className="rounded-lg border border-white/60 bg-white/70 p-4 shadow-sm">
@@ -205,9 +199,7 @@ export default async function HomePage() {
                     <ThermometerSun className="h-4 w-4 text-amber-500" aria-hidden /> Feels like
                   </dt>
                   <dd className="mt-2 text-lg font-semibold text-slate-800">
-                    {currentConditions && Number.isFinite(currentConditions.apparentTemperatureC)
-                      ? `${currentConditions.apparentTemperatureC.toFixed(1)}°C`
-                      : "—"}
+                    {formatTemp(currentConditions?.apparentTemperatureC ?? Number.NaN)}
                   </dd>
                 </div>
                 <div className="rounded-lg border border-white/60 bg-white/70 p-4 shadow-sm">
@@ -215,7 +207,7 @@ export default async function HomePage() {
                     <Cloud className="h-4 w-4 text-slate-500" aria-hidden /> Overnight low
                   </dt>
                   <dd className="mt-2 text-lg font-semibold text-slate-800">
-                    {today && Number.isFinite(today.temperatureMinC) ? `${today.temperatureMinC.toFixed(1)}°C` : "—"}
+                    {formatTemp(today?.temperatureMinC ?? Number.NaN)}
                   </dd>
                 </div>
               </dl>
