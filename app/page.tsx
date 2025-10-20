@@ -16,12 +16,21 @@ import { getUserProfile } from "@/src/server/user-service";
 import { getWeatherProvider } from "@/src/lib/weather/provider";
 import { PlantCard } from "@/src/components/plants/plant-card";
 import { Button } from "@/src/components/ui/button";
+import {
+  DEFAULT_MEASUREMENT_PREFERENCES,
+  formatPrecipitation,
+  formatPressure,
+  formatTemperature,
+  formatWindSpeed,
+} from "@/src/lib/units";
+import { getMeasurementPreferencesByUser } from "@/src/server/measurement-preference-service";
 
 export default async function HomePage() {
   const [plants, session] = await Promise.all([getPlants(), auth()]);
   const provider = getWeatherProvider();
   const sowNow = plants.filter((plant) => plant.status.status === "NOW").slice(0, 6);
 
+  let measurement = { ...DEFAULT_MEASUREMENT_PREFERENCES };
   let forecast: Awaited<ReturnType<typeof provider.getForecast>> = [];
   let locationName = "Location not set";
   let latitude: number | null = null;
@@ -33,7 +42,19 @@ export default async function HomePage() {
   let zone: string = ""; 
 
   if (session?.user?.id) {
-    const profile = await getUserProfile(session.user.id);
+    const [profile, measurementSnapshot] = await Promise.all([
+      getUserProfile(session.user.id),
+      getMeasurementPreferencesByUser(session.user.id),
+    ]);
+
+    measurement = {
+      temperatureUnit: measurementSnapshot.temperatureUnit,
+      windSpeedUnit: measurementSnapshot.windSpeedUnit,
+      pressureUnit: measurementSnapshot.pressureUnit,
+      precipitationUnit: measurementSnapshot.precipitationUnit,
+      lengthUnit: measurementSnapshot.lengthUnit,
+    };
+
     if (profile?.locationLat != null && profile?.locationLon != null) {
       hasLocation = true;
       latitude = profile.locationLat;
@@ -56,6 +77,10 @@ export default async function HomePage() {
   const today = forecast[0] ?? null;
   const todayStyle = getWeatherStyle(today?.rainChance ?? 0);
   const TodayIcon = todayStyle.Icon;
+  const formatTemp = (value: number) => formatTemperature(value, measurement.temperatureUnit);
+  const formatWind = (value: number) => formatWindSpeed(value, measurement.windSpeedUnit);
+  const formatPress = (value: number) => formatPressure(value, measurement.pressureUnit);
+  const formatPrecip = (value: number) => formatPrecipitation(value, measurement.precipitationUnit);
 
   return (
     <div className="space-y-10">
@@ -117,7 +142,7 @@ export default async function HomePage() {
           <p className="flex items-center gap-2">
             <ThermometerSun className="h-4 w-4 text-amber-500" aria-hidden />
             <span>
-              Soil temperature: {hasLocation && soilTemp !== null && Number.isFinite(soilTemp) ? `${soilTemp.toFixed(1)}°C` : "—"}
+              Soil temperature: {hasLocation && soilTemp !== null ? formatTemp(soilTemp) : "—"}
             </span>
           </p>
           <p className="flex items-center gap-2">
@@ -134,7 +159,7 @@ export default async function HomePage() {
                     <Sun className="h-4 w-4 text-amber-500" aria-hidden /> High
                   </dt>
                   <dd className="mt-2 text-lg font-semibold text-slate-800">
-                    {today && Number.isFinite(today.temperatureMaxC) ? `${today.temperatureMaxC.toFixed(1)}°C` : "—"}
+                    {formatTemp(today?.temperatureMaxC ?? Number.NaN)}
                   </dd>
                 </div>
                 <div className="rounded-lg border border-white/60 bg-white/70 p-4 shadow-sm">
@@ -148,9 +173,7 @@ export default async function HomePage() {
                     <Wind className="h-4 w-4 text-sky-600" aria-hidden /> Wind speed
                   </dt>
                   <dd className="mt-2 text-lg font-semibold text-slate-800">
-                    {currentConditions && Number.isFinite(currentConditions.windSpeedKph)
-                      ? `${currentConditions.windSpeedKph.toFixed(1)} km/h`
-                      : "—"}
+                    {formatWind(currentConditions?.windSpeedKph ?? Number.NaN)}
                   </dd>
                 </div>
                 <div className="rounded-lg border border-white/60 bg-white/70 p-4 shadow-sm">
@@ -158,9 +181,7 @@ export default async function HomePage() {
                     <Wind className="h-4 w-4 rotate-45 text-sky-600" aria-hidden /> Wind gust
                   </dt>
                   <dd className="mt-2 text-lg font-semibold text-slate-800">
-                    {currentConditions && Number.isFinite(currentConditions.windGustKph)
-                      ? `${currentConditions.windGustKph.toFixed(1)} km/h`
-                      : "—"}
+                    {formatWind(currentConditions?.windGustKph ?? Number.NaN)}
                   </dd>
                 </div>
                 <div className="rounded-lg border border-white/60 bg-white/70 p-4 shadow-sm">
@@ -188,9 +209,7 @@ export default async function HomePage() {
                     <GaugeCircle className="h-4 w-4 text-indigo-600" aria-hidden /> Pressure
                   </dt>
                   <dd className="mt-2 text-lg font-semibold text-slate-800">
-                    {currentConditions && Number.isFinite(currentConditions.pressureHpa)
-                      ? `${Math.round(currentConditions.pressureHpa)} hPa`
-                      : "—"}
+                    {formatPress(currentConditions?.pressureHpa ?? Number.NaN)}
                   </dd>
                 </div>
                 <div className="rounded-lg border border-white/60 bg-white/70 p-4 shadow-sm">
@@ -198,9 +217,7 @@ export default async function HomePage() {
                     <ThermometerSun className="h-4 w-4 text-amber-500" aria-hidden /> Feels like
                   </dt>
                   <dd className="mt-2 text-lg font-semibold text-slate-800">
-                    {currentConditions && Number.isFinite(currentConditions.apparentTemperatureC)
-                      ? `${currentConditions.apparentTemperatureC.toFixed(1)}°C`
-                      : "—"}
+                    {formatTemp(currentConditions?.apparentTemperatureC ?? Number.NaN)}
                   </dd>
                 </div>
                 <div className="rounded-lg border border-white/60 bg-white/70 p-4 shadow-sm">
@@ -208,7 +225,7 @@ export default async function HomePage() {
                     <Cloud className="h-4 w-4 text-slate-500" aria-hidden /> Overnight low
                   </dt>
                   <dd className="mt-2 text-lg font-semibold text-slate-800">
-                    {today && Number.isFinite(today.temperatureMinC) ? `${today.temperatureMinC.toFixed(1)}°C` : "—"}
+                    {formatTemp(today?.temperatureMinC ?? Number.NaN)}
                   </dd>
                 </div>
               </dl>
@@ -262,29 +279,45 @@ export default async function HomePage() {
               const style = getWeatherStyle(day.rainChance);
               const Icon = style.Icon;
               return (
-                <div key={day.date} className={`rounded border p-4 transition hover:shadow-sm ${style.tone}`}>
-                  <div className="flex items-center justify-between">
+                <details
+                  key={day.date}
+                  className={`group rounded border p-4 transition hover:shadow-sm ${style.tone}`}
+                >
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm text-slate-700">
                     <div>
                       <p className="font-medium text-slate-800">{new Date(day.date).toDateString()}</p>
                       <p className={`text-xs font-medium ${style.accent}`}>{style.label}</p>
                     </div>
-                    <Icon className={`h-5 w-5 ${style.accent}`} aria-hidden />
-                  </div>
-                  <dl className="mt-3 space-y-1 text-xs text-slate-600">
-                    <div className="flex justify-between">
-                      <dt>High</dt>
-                      <dd>{Number.isFinite(day.temperatureMaxC) ? `${day.temperatureMaxC.toFixed(1)}°C` : "—"}</dd>
+                    <div className="flex flex-col items-end gap-1 text-right text-xs sm:text-sm">
+                      <span>High: {formatTemp(day.temperatureMaxC ?? Number.NaN)}</span>
+                      <span>Low: {formatTemp(day.temperatureMinC ?? Number.NaN)}</span>
+                      <span>Wind: {formatWind(day.windSpeedMaxKph ?? Number.NaN)}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <dt>Low</dt>
-                      <dd>{Number.isFinite(day.temperatureMinC) ? `${day.temperatureMinC.toFixed(1)}°C` : "—"}</dd>
-                    </div>
+                    <Icon className={`h-5 w-5 shrink-0 ${style.accent}`} aria-hidden />
+                  </summary>
+                  <dl className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
                     <div className="flex justify-between">
                       <dt>Rain chance</dt>
                       <dd>{day.rainChance ?? 0}%</dd>
                     </div>
+                    <div className="flex justify-between">
+                      <dt>Precipitation</dt>
+                      <dd>{formatPrecip(day.precipitationMm ?? Number.NaN)}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt>Wind gust</dt>
+                      <dd>{formatWind(day.windGustMaxKph ?? Number.NaN)}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt>Dominant wind</dt>
+                      <dd>
+                        {Number.isFinite(day.windDirectionDominantDeg)
+                          ? `${toCardinal(day.windDirectionDominantDeg)} (${Math.round(day.windDirectionDominantDeg)}°)`
+                          : "—"}
+                      </dd>
+                    </div>
                   </dl>
-                </div>
+                </details>
               );
             })
           ) : (

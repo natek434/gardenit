@@ -39,6 +39,27 @@ Demo authentication credentials:
 
 See [`docs/USAGE.md`](docs/USAGE.md) for a walkthrough of core workflows, administrator tooling, and planting window maintenance tips.
 
+### Notification delivery
+
+Gardenit records every alert in the in-app feed and can optionally fan out email or push-style notifications. Configure SMTP credentials in `.env.local` so messages can be delivered:
+
+```bash
+SMTP_HOST=smtp.example.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=apikey
+SMTP_PASS=super-secret
+SMTP_FROM="Gardenit <hello@gardenit.nz>"
+```
+
+Once email is available, visit **Settings → Notification preferences** to:
+
+- Enable or disable email, push (email fallback), and in-app logging independently.
+- Pick the local hour and timezone for the daily digest rule—the scheduler keeps the RRULE in sync when you update the time.
+- Set a do not disturb window so email/push alerts pause overnight while in-app history continues to accumulate.
+
+Do not disturb windows apply to the selected timezone. If you skip a start or end hour the app falls back to the defaults (22:00–07:00). In-app notifications remain available even while quiet hours are active.
+
 ### Testing & Quality
 
 ```bash
@@ -67,6 +88,7 @@ The Prisma schema (see `prisma/schema.prisma`) models users, plants, planting wi
 
 ### Importing plant data from Perenual
 - Add `PERENUAL_API_KEY` to your `.env.local`. Keys are available from [perenual.com](https://perenual.com/docs/api).
+- Optional: set `PERENUAL_DAILY_REQUEST_LIMIT` to the daily quota for your plan (defaults to `90` calls so a full sync of 100 plants stays under the Basic plan's allowance) and `PERENUAL_REQUEST_INTERVAL_MS` to the minimum gap between calls (defaults to `1200` ms, roughly 50 calls/minute).
 - Review the 100 common vegetables, herbs, and fruits listed in `data/perenual-targets.ts`. Adjust the list or categories if you need different crops.
 - Run the importer to fetch JSON from the Perenual API and upsert the plants into your local database:
 
@@ -74,13 +96,25 @@ The Prisma schema (see `prisma/schema.prisma`) models users, plants, planting wi
   pnpm perenual:import
   ```
 
-The helper script automatically matches species by common name, fetches full detail payloads, and maps them to the extended Prisma schema. Any plants that cannot be matched are reported at the end so you can refine the target list or adjust the search term. The script is idempotent—rerunning it keeps data in sync with Perenual updates.
+The helper script automatically matches species by common name, fetches full detail payloads, and maps them to the extended Prisma schema. Any plants that cannot be matched are reported at the end so you can refine the target list or adjust the search term. If Perenual omits important fields (description, sunlight, watering, soil, or imagery) the importer logs a warning so you can revisit the record manually. The script is idempotent—rerunning it keeps data in sync with Perenual updates.
+
+For day-to-day upkeep without exhausting your API quota, use the incremental sync helper:
+
+```
+pnpm perenual:sync
+```
+
+The command checks which of the 100 targets are missing Perenual details in your database, fetches only the gaps, and records two sets of outcomes in `data/perenual-sync-log.json`:
+
+- `missingData` — plants that Perenual doesn't currently expose or that lack essential fields (description, sunlight, watering, soil, imagery). Future runs skip them until you delete the log entry.
+- `apiLimit` — plants skipped after rate-limit errors. Entries include a timestamp so the next run in the same day won't re-issue the request.
+
+Successful imports clear any existing log entries automatically.
 
 Gardenit reads the following Perenual endpoints:
 
 - `GET /api/species-list` for initial IDs filtered by the names in `perenual-targets.ts`
 - `GET /api/species/details/:id` for sunlight, watering, toxicity, `sowing` month ranges, hardiness, and imagery
-- `GET /api/species-care-guide/:id` for additional descriptive text where available
 
 The `sowing` data in `species/details` maps directly to the `ClimatePlantWindow` month ranges used by Gardenit. Use the `growth` and `watering` objects from the same payload to populate manual imports when working offline.
 
