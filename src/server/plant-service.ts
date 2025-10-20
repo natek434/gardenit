@@ -169,9 +169,9 @@ export type PlantAdminSummary = Prisma.PlantGetPayload<{ select: typeof plantAdm
 export type ClimateWindowUpsertInput = {
   id?: string;
   climateZoneId: string;
-  sowIndoors: Prisma.JsonValue | null;
-  sowOutdoors: Prisma.JsonValue | null;
-  transplant: Prisma.JsonValue | null;
+  sowIndoors: Prisma.InputJsonValue | typeof Prisma.JsonNull;
+  sowOutdoors: Prisma.InputJsonValue | typeof Prisma.JsonNull;
+  transplant: Prisma.InputJsonValue | typeof Prisma.JsonNull;
   notes: string | null;
 };
 
@@ -192,16 +192,16 @@ export type PlantAdminUpdateInput = {
     soilPreferences: string[];
     waterGeneral: string;
     watering: string | null;
-    wateringGeneralBenchmark: Prisma.JsonValue | null;
-    plantAnatomy: Prisma.JsonValue | null;
+    wateringGeneralBenchmark: Prisma.InputJsonValue | typeof Prisma.JsonNull;
+    plantAnatomy: Prisma.InputJsonValue | typeof Prisma.JsonNull;
     pruningMonth: string[];
-    pruningCount: Prisma.JsonValue | null;
+    pruningCount: Prisma.InputJsonValue | typeof Prisma.JsonNull;
     seeds: number | null;
     attracts: string[];
     propagationMethods: string[];
     hardinessMin: string | null;
     hardinessMax: string | null;
-    hardinessLocation: Prisma.JsonValue | null;
+    hardinessLocation: Prisma.InputJsonValue | typeof Prisma.JsonNull;
     flowers: boolean | null;
     floweringSeason: string | null;
     cones: boolean | null;
@@ -229,16 +229,16 @@ export type PlantAdminUpdateInput = {
     careLevel: string | null;
     careNotes: string | null;
     description: string | null;
-    defaultImage: Prisma.JsonValue | null;
-    otherImages: Prisma.JsonValue | null;
+    defaultImage: Prisma.InputJsonValue | typeof Prisma.JsonNull;
+    otherImages: Prisma.InputJsonValue | typeof Prisma.JsonNull;
     imageLocalPath: string | null;
     wateringQuality: string[];
     wateringPeriod: string[];
-    wateringAvgVolume: Prisma.JsonValue | null;
-    wateringDepth: Prisma.JsonValue | null;
-    wateringBasedTemperature: Prisma.JsonValue | null;
-    wateringPhLevel: Prisma.JsonValue | null;
-    sunlightDuration: Prisma.JsonValue | null;
+    wateringAvgVolume: Prisma.InputJsonValue | typeof Prisma.JsonNull;
+    wateringDepth: Prisma.InputJsonValue | typeof Prisma.JsonNull;
+    wateringBasedTemperature: Prisma.InputJsonValue | typeof Prisma.JsonNull;
+    wateringPhLevel: Prisma.InputJsonValue | typeof Prisma.JsonNull;
+    sunlightDuration: Prisma.InputJsonValue | typeof Prisma.JsonNull;
     sowDepthMm: number | null;
     spacingInRowCm: number | null;
     spacingBetweenRowsCm: number | null;
@@ -270,7 +270,7 @@ type PlantFilters = {
   climateZoneId?: string;
 };
 
-type AwaitedReturn<T> = T extends Promise<infer U> ? U : never;
+type AwaitedReturn<T extends (...args: any[]) => unknown> = Awaited<ReturnType<T>>;
 
 export const getPlants = cache(async (filters: PlantFilters = {}, userZone?: string) => {
   return withCache(
