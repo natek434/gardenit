@@ -150,7 +150,7 @@ function InfoCard({ title, value, helper }: InfoCardProps) {
 
 type RelationCardProps = {
   title: string;
-  relationships: Array<{ plantB: { commonName: string }; reason: string | null }>;
+  relationships: Array<{ targetName: string; targetPlant: { id: string; commonName: string } | null; reason: string | null }>;
   empty: string;
   variant?: Parameters<typeof Badge>[0]["variant"];
 };
@@ -164,9 +164,14 @@ function RelationCard({ title, relationships, empty, variant = "success" }: Rela
           <p className="text-sm text-slate-500">{empty}</p>
         ) : (
           relationships.map((relationship) => (
-            <div key={relationship.plantB.commonName} className="flex items-start justify-between gap-4">
+            <div
+              key={`${relationship.targetPlant?.id ?? relationship.targetName}-${relationship.targetName}`}
+              className="flex items-start justify-between gap-4"
+            >
               <div>
-                <p className="font-medium text-slate-700">{relationship.plantB.commonName}</p>
+                <p className="font-medium text-slate-700">
+                  {relationship.targetPlant?.commonName ?? relationship.targetName}
+                </p>
                 {relationship.reason ? (
                   <p className="text-xs text-slate-500">{relationship.reason}</p>
                 ) : null}

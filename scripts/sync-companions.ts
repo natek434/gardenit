@@ -71,6 +71,42 @@ function tokenize(normalized: string): string[] {
     .map((token) => (token.endsWith("s") && token.length > 3 ? token.slice(0, -1) : token));
 }
 
+function addPluralVariants(variants: Set<string>, value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return;
+
+  const tokens = trimmed.split(/\s+/);
+  const last = tokens.at(-1);
+  if (!last) return;
+
+  const prefix = tokens.slice(0, -1).join(" ");
+  const prefixWithSpace = prefix ? `${prefix} ` : "";
+  const lower = last.toLowerCase();
+
+  const addWord = (word: string) => {
+    const candidate = `${prefixWithSpace}${word}`.trim();
+    if (candidate) variants.add(candidate);
+  };
+
+  if (!lower.endsWith("s")) {
+    if (lower.endsWith("y") && last.length > 1 && !/[aeiou]y$/i.test(last)) {
+      addWord(`${last.slice(0, -1)}ies`);
+    } else if (/(?:ch|sh|x|z|s|o)$/i.test(lower)) {
+      addWord(`${last}es`);
+    } else {
+      addWord(`${last}s`);
+    }
+  }
+
+  if (lower.endsWith("ies") && last.length > 3) {
+    addWord(`${last.slice(0, -3)}y`);
+  } else if (/(?:ches|shes|xes|zes|ses|oes)$/i.test(lower) && last.length > 2) {
+    addWord(`${last.slice(0, -2)}`);
+  } else if (lower.endsWith("s") && !lower.endsWith("us") && !lower.endsWith("ss") && last.length > 3) {
+    addWord(`${last.slice(0, -1)}`);
+  }
+}
+
 function levenshtein(a: string, b: string): number {
   if (a === b) return 0;
   if (!a.length) return b.length;
@@ -154,6 +190,11 @@ function buildNameVariants(name: string): string[] {
     if (token) variants.add(token);
   }
 
+  const snapshot = Array.from(variants);
+  for (const variant of snapshot) {
+    addPluralVariants(variants, variant);
+  }
+
   return Array.from(variants);
 }
 
@@ -189,18 +230,16 @@ function matchPlant(name: string, plants: PlantRecord[], threshold: number): Mat
 
 type RelationshipType = "companion" | "antagonist";
 
-type PairKey = {
-  first: PlantRecord;
-  second: PlantRecord;
+type PendingRow = {
+  plantId: string;
+  targetPlantId: string | null;
+  targetName: string;
   type: RelationshipType;
-  missing: {
-    firstToSecond: boolean;
-    secondToFirst: boolean;
-  };
 };
 
-function canonicalKey(type: RelationshipType, aId: string, bId: string): string {
-  return `${type}:${[aId, bId].sort().join("|")}`;
+function rowKey(row: PendingRow | { plantId: string; targetPlantId: string | null; targetName: string; type: RelationshipType }) {
+  const identity = row.targetPlantId ?? normalizeName(row.targetName);
+  return `${row.plantId}|${row.type}|${identity}`;
 }
 
 async function main() {
@@ -210,27 +249,19 @@ async function main() {
   const threshold = thresholdArg ? Number(thresholdArg.split("=")[1]) || DEFAULT_THRESHOLD : DEFAULT_THRESHOLD;
 
   const [relationships, plants] = await Promise.all([loadRelationships(), loadPlants()]);
-
-  const pending = new Map<string, PairKey>();
+  const pending: PendingRow[] = [];
+  const pendingKeys = new Set<string>();
   const warnings: string[] = [];
 
   const existing = await prisma.companion.findMany({
     select: {
-      plantAId: true,
-      plantBId: true,
+      plantId: true,
+      targetPlantId: true,
+      targetName: true,
       type: true,
     },
   });
-  const existingMap = new Map<string, Set<string>>();
-  for (const entry of existing) {
-    const key = canonicalKey(entry.type as RelationshipType, entry.plantAId, entry.plantBId);
-    const orientationKey = `${entry.plantAId}->${entry.plantBId}`;
-    if (!existingMap.has(key)) {
-      existingMap.set(key, new Set([orientationKey]));
-    } else {
-      existingMap.get(key)!.add(orientationKey);
-    }
-  }
+  const existingKeys = new Set(existing.map((entry) => rowKey(entry)));
 
   for (const row of relationships) {
     const baseMatch = matchPlant(row.plant, plants, threshold);
@@ -243,45 +274,40 @@ async function main() {
 
     const processList = (items: string[], type: RelationshipType) => {
       for (const item of items) {
-        const match = matchPlant(item, plants, threshold);
-        if (!match) {
-          warnings.push(`⚠️ ${type === "companion" ? "Companion" : "Antagonist"} for "${row.plant}" not matched: "${item}"`);
-          continue;
-        }
-        if (match.record.id === baseMatch.record.id) {
-          continue;
-        }
-        const key = canonicalKey(type, baseMatch.record.id, match.record.id);
-        const existingOrientations = existingMap.get(key) ?? new Set<string>();
-        const [first, second] = [baseMatch.record, match.record].sort((left, right) =>
-          left.id.localeCompare(right.id),
-        );
-        const firstToSecondKey = `${first.id}->${second.id}`;
-        const secondToFirstKey = `${second.id}->${first.id}`;
-        const needsFirstToSecond = !existingOrientations.has(firstToSecondKey);
-        const needsSecondToFirst = !existingOrientations.has(secondToFirstKey);
+        const label = item.trim();
+        if (!label) continue;
 
-        if (!needsFirstToSecond && !needsSecondToFirst) {
-          continue;
+        const match = matchPlant(label, plants, threshold);
+        const isSelf = match && match.record.id === baseMatch.record.id;
+        if (isSelf) {
+          warnings.push(`⚠️ Skipping self reference "${label}" for "${row.plant}"`);
         }
 
-        const current = pending.get(key);
-        if (current) {
-          current.missing.firstToSecond = current.missing.firstToSecond || needsFirstToSecond;
-          current.missing.secondToFirst = current.missing.secondToFirst || needsSecondToFirst;
+        const targetPlantId = match && !isSelf ? match.record.id : null;
+        const displayName = match && !isSelf ? match.matchedName : label;
+        const pendingRow: PendingRow = {
+          plantId: baseMatch.record.id,
+          targetPlantId,
+          targetName: displayName,
+          type,
+        };
+
+        const key = rowKey(pendingRow);
+        if (existingKeys.has(key) || pendingKeys.has(key)) {
+          continue;
+        }
+
+        pending.push(pendingRow);
+        pendingKeys.add(key);
+
+        if (!match || isSelf) {
+          console.log(`  • ${label} → saved as text`);
+          if (!match) {
+            warnings.push(`⚠️ No database match for "${label}" (stored as text)`);
+          }
         } else {
-          pending.set(key, {
-            first,
-            second,
-            type,
-            missing: {
-              firstToSecond: needsFirstToSecond,
-              secondToFirst: needsSecondToFirst,
-            },
-          });
+          console.log(`  ✓ ${label} → ${match.matchedName} (${match.score.toFixed(2)})`);
         }
-
-        console.log(`  ${type === "companion" ? "✓" : "✗"} ${item} → ${match.matchedName} (${match.score.toFixed(2)})`);
       }
     };
 
@@ -296,23 +322,13 @@ async function main() {
     }
   }
 
-  if (!pending.size) {
+  if (!pending.length) {
     console.log("\nNo new relationships to add.");
     await prisma.$disconnect();
     return;
   }
 
-  const preparedRows = Array.from(pending.values()).reduce((total, entry) => {
-    return total + (entry.missing.firstToSecond ? 1 : 0) + (entry.missing.secondToFirst ? 1 : 0);
-  }, 0);
-
-  if (!preparedRows) {
-    console.log("\nAll relationships already present; nothing to do.");
-    await prisma.$disconnect();
-    return;
-  }
-
-  console.log(`\nPrepared ${pending.size} unique relationship pairs (${preparedRows} missing rows).`);
+  console.log(`\nPrepared ${pending.length} relationship rows.`);
 
   if (!commit) {
     console.log("Run again with --commit to insert them into the database.");
@@ -320,24 +336,18 @@ async function main() {
     return;
   }
 
-  const rows = Array.from(pending.values()).flatMap(({ first, second, type, missing }) => {
-    const reason = type === "companion" ? "Manual companion list" : "Manual antagonist list";
-    const entries = [] as Array<{ plantAId: string; plantBId: string; type: RelationshipType; reason: string }>;
-    if (missing.firstToSecond) {
-      entries.push({ plantAId: first.id, plantBId: second.id, type, reason });
-    }
-    if (missing.secondToFirst) {
-      entries.push({ plantAId: second.id, plantBId: first.id, type, reason });
-    }
-    return entries;
-  });
-
   await prisma.companion.createMany({
-    data: rows,
+    data: pending.map((row) => ({
+      plantId: row.plantId,
+      targetPlantId: row.targetPlantId,
+      targetName: row.targetName,
+      type: row.type,
+      reason: null,
+    })),
     skipDuplicates: true,
   });
 
-  console.log(`Inserted ${rows.length} rows into Companion table.`);
+  console.log(`Inserted ${pending.length} rows into Companion table.`);
 
   await prisma.$disconnect();
 }
