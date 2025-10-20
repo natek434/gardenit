@@ -2,7 +2,7 @@ import nodemailer from "nodemailer";
 
 let transporterPromise: Promise<nodemailer.Transporter> | null = null;
 
-function getTransporter(): Promise<nodemailer.Transporter> | null {
+async function getTransporter(): Promise<nodemailer.Transporter | null> {
   if (!transporterPromise) {
     const host = process.env.SMTP_HOST;
     const port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : undefined;
@@ -13,15 +13,17 @@ function getTransporter(): Promise<nodemailer.Transporter> | null {
       console.warn("[Gardenit] SMTP credentials missing. Emails will be logged to console.");
       return null;
     }
-    transporterPromise = nodemailer.createTransport({
-      host,
-      port,
-      secure,
-      auth: {
-        user,
-        pass,
-      },
-    });
+    transporterPromise = Promise.resolve(
+      nodemailer.createTransport({
+        host,
+        port,
+        secure,
+        auth: {
+          user,
+          pass,
+        },
+      }),
+    );
   }
   return transporterPromise;
 }
@@ -37,7 +39,7 @@ export async function sendEmail({
   text: string;
   html?: string;
 }): Promise<boolean> {
-  const transporter = getTransporter();
+  const transporter = await getTransporter();
   const from = process.env.SMTP_FROM ?? process.env.SMTP_USER ?? "no-reply@gardenit.app";
   if (!transporter) {
     console.info(`[Gardenit] Email to ${to}: ${subject}\n${text}`);

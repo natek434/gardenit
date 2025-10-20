@@ -15,7 +15,13 @@ export const authConfig: NextAuthConfig = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials.password) return null;
+        if (
+          !credentials ||
+          typeof credentials.email !== "string" ||
+          typeof credentials.password !== "string"
+        ) {
+          return null;
+        }
         const user = await prisma.user.findUnique({ where: { email: credentials.email } });
         if (!user?.hashedPassword) return null;
         const valid = await bcrypt.compare(credentials.password, user.hashedPassword);
