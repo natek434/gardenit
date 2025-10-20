@@ -4,6 +4,7 @@ import { perenualTargets } from "../data/perenual-targets";
 import { persistPlantImage } from "./utils/image-store";
 import {
   fallbackTitle,
+  detectMissingFields,
   findSpecies,
   getPreferredImageUrl,
   getSpeciesDetail,
@@ -41,6 +42,7 @@ async function main() {
       });
 
       const payload = toPlantPayload(detail, target.category, target.name, imageLocalPath);
+      const missingFields = detectMissingFields(detail);
 
       await prisma.plant.upsert({
         where: { perenualId: payload.perenualId ?? match.id },
@@ -49,6 +51,11 @@ async function main() {
       });
 
       console.log(`Imported ${target.name} (matched ${detail.common_name ?? match.common_name ?? "unknown"})`);
+      if (missingFields.length > 0) {
+        console.warn(
+          ` - ${target.name} is missing the following fields from Perenual: ${missingFields.join(", ")}.`,
+        );
+      }
     } catch (error) {
       const reason = error instanceof Error ? error.message : "Unknown error";
       failures.push({ name: target.name, reason });

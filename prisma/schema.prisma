@@ -23,6 +23,7 @@ model User {
   focusItems    FocusItem[]
   notificationRules NotificationRule[]
   notifications Notification[]
+  notificationPreference NotificationPreference?
   accounts      Account[]
   sessions      Session[]
   collections   PlantCollection[]
@@ -218,6 +219,22 @@ model Notification {
   meta      Json?
   user      User                @relation(fields: [userId], references: [id])
   rule      NotificationRule?   @relation(fields: [ruleId], references: [id])
+}
+
+model NotificationPreference {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  emailEnabled        Boolean  @default(true)
+  pushEnabled         Boolean  @default(true)
+  inAppEnabled        Boolean  @default(true)
+  emailDigestHour     Int      @default(7)
+  emailDigestTimezone String?
+  dndEnabled          Boolean  @default(false)
+  dndStartHour        Int?
+  dndEndHour          Int?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model PlantCollection {

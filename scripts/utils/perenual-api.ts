@@ -92,7 +92,37 @@ export type PerenualPlantDetail = {
 
 const API_BASE = "https://perenual.com/api/v2";
 
+const RATE_LIMIT_INTERVAL_MS = Number(process.env.PERENUAL_REQUEST_INTERVAL_MS ?? "1200");
+const DAILY_REQUEST_LIMIT = Number(process.env.PERENUAL_DAILY_REQUEST_LIMIT ?? "90");
+
+let requestCount = 0;
+let lastRequestTimestamp = 0;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function applyRequestGuards() {
+  if (DAILY_REQUEST_LIMIT > 0 && requestCount >= DAILY_REQUEST_LIMIT) {
+    throw new Error(
+      `Request budget of ${DAILY_REQUEST_LIMIT} calls reached for this run. Adjust PERENUAL_DAILY_REQUEST_LIMIT if needed.`,
+    );
+  }
+
+  if (RATE_LIMIT_INTERVAL_MS > 0 && lastRequestTimestamp > 0) {
+    const elapsed = Date.now() - lastRequestTimestamp;
+    const waitTime = RATE_LIMIT_INTERVAL_MS - elapsed;
+    if (waitTime > 0) {
+      await sleep(waitTime);
+    }
+  }
+
+  lastRequestTimestamp = Date.now();
+  requestCount += 1;
+}
+
 async function fetchJson<T>(url: URL): Promise<T> {
+  await applyRequestGuards();
   const response = await fetch(url, { headers: { Accept: "application/json" } });
   if (!response.ok) {
     const text = await response.text();
@@ -157,6 +187,33 @@ function toTitleCase(value: string): string {
 
 export function fallbackTitle(name: string): string {
   return toTitleCase(name);
+}
+
+export function detectMissingFields(detail: PerenualPlantDetail): string[] {
+  const missing: string[] = [];
+  if (!detail.description || !detail.description.trim()) {
+    missing.push("description");
+  }
+  if (!detail.watering || !detail.watering.trim()) {
+    missing.push("watering");
+  }
+  if (normaliseArray(detail.sunlight).length === 0) {
+    missing.push("sunlight");
+  }
+  if (normaliseArray(detail.soil).length === 0) {
+    missing.push("soil");
+  }
+  const hasImage = Boolean(
+    detail.default_image?.original_url ||
+      detail.default_image?.regular_url ||
+      detail.default_image?.medium_url ||
+      detail.default_image?.small_url ||
+      detail.default_image?.thumbnail,
+  );
+  if (!hasImage) {
+    missing.push("image");
+  }
+  return missing;
 }
 
 export function toPlantPayload(

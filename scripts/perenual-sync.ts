@@ -6,6 +6,7 @@ import { perenualTargets } from "../data/perenual-targets";
 import { persistPlantImage } from "./utils/image-store";
 import {
   fallbackTitle,
+  detectMissingFields,
   findSpecies,
   getPreferredImageUrl,
   getSpeciesDetail,
@@ -180,6 +181,8 @@ async function main() {
         { default_image: detail.default_image },
       );
 
+      const missingFields = detectMissingFields(detail);
+
       const payload = toPlantPayload(detail, target.category, target.name, imageLocalPath);
 
       if (existing) {
@@ -192,17 +195,35 @@ async function main() {
         });
       }
 
+      if (missingFields.length > 0) {
+        const logged = recordLogEntry(log, LogCategory.MissingData, target.name, {
+          perenualId: payload.perenualId ?? match.id,
+          reason: `Missing fields from API: ${missingFields.join(", ")}`,
+        });
+        summary.missingData.push({ name: target.name, reason: logged.reason });
+        continue;
+      }
+
       clearLogEntries(log, target.name);
       summary.updated.push(target.name);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       console.error(`Failed to refresh ${target.name}: ${reason}`);
+      if (/Request budget of/.test(reason)) {
+        const logged = recordLogEntry(log, LogCategory.ApiLimit, target.name, {
+          perenualId: existing?.perenualId ?? null,
+          reason,
+        });
+        summary.apiLimited.push({ name: target.name, reason: logged.reason });
+        break;
+      }
       if (/\b429\b/.test(reason) || /rate limit/i.test(reason)) {
         const logged = recordLogEntry(log, LogCategory.ApiLimit, target.name, {
           perenualId: existing?.perenualId ?? null,
           reason,
         });
         summary.apiLimited.push({ name: target.name, reason: logged.reason });
+        break;
       } else if (/\b404\b/.test(reason) || /No species match/i.test(reason)) {
         const logged = recordLogEntry(log, LogCategory.MissingData, target.name, {
           perenualId: existing?.perenualId ?? null,
