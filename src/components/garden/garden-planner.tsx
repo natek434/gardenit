@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import type { CSSProperties, DragEvent, FocusEvent, FormEvent, RefObject } from "react";
+import type { CSSProperties, DragEvent, FocusEvent, FormEvent, MouseEvent, RefObject } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { FocusKind } from "@prisma/client";
@@ -65,7 +65,25 @@ type PlannerPlant = {
   spacingBetweenRowsCm: number | null;
 };
 
-type SpacingGuide = {
+type MeasurementEdge = "left" | "right" | "top" | "bottom";
+
+type MeasurementAnchor =
+  | {
+      type: "plant";
+      plantingId: string;
+      xCm: number;
+      yCm: number;
+      label: string;
+    }
+  | {
+      type: "edge";
+      edge: MeasurementEdge;
+      xCm: number;
+      yCm: number;
+      label: string;
+    };
+
+type MeasurementLine = {
   id: string;
   orientation: "horizontal" | "vertical";
   startPercent: number;
@@ -75,6 +93,181 @@ type SpacingGuide = {
   labelYPercent: number;
   distanceCm: number;
 };
+
+function anchorsEqual(a: MeasurementAnchor | null, b: MeasurementAnchor | null) {
+  if (!a || !b) return false;
+  if (a.type !== b.type) return false;
+  if (a.type === "plant" && b.type === "plant") {
+    return a.plantingId === b.plantingId;
+  }
+  if (a.type === "edge" && b.type === "edge") {
+    return (
+      a.edge === b.edge &&
+      Math.abs(a.xCm - b.xCm) < 0.001 &&
+      Math.abs(a.yCm - b.yCm) < 0.001
+    );
+  }
+  return false;
+}
+
+function createHorizontalLine(
+  id: string,
+  startX: number,
+  endX: number,
+  constantY: number,
+  bedWidthCm: number,
+  bedLengthCm: number,
+  labelYOffset = -3,
+): MeasurementLine | null {
+  const distance = Math.abs(endX - startX);
+  if (distance <= 0.5) return null;
+  const safeWidth = Math.max(0.0001, bedWidthCm);
+  const safeLength = Math.max(0.0001, bedLengthCm);
+  const toPercent = (value: number, total: number) => (value / total) * 100;
+  const clampPercent = (value: number) => Math.min(98, Math.max(2, value));
+  const startPercent = toPercent(Math.min(startX, endX), safeWidth);
+  const endPercent = toPercent(Math.max(startX, endX), safeWidth);
+  if (Math.abs(endPercent - startPercent) < 0.5) return null;
+  const constantPercent = clampPercent(toPercent(constantY, safeLength));
+  const labelXPercent = (startPercent + endPercent) / 2;
+  const labelYPercent = clampPercent(constantPercent + labelYOffset);
+  return {
+    id,
+    orientation: "horizontal",
+    startPercent,
+    endPercent,
+    constantPercent,
+    labelXPercent,
+    labelYPercent,
+    distanceCm: distance,
+  };
+}
+
+function createVerticalLine(
+  id: string,
+  startY: number,
+  endY: number,
+  constantX: number,
+  bedWidthCm: number,
+  bedLengthCm: number,
+  labelXOffset = 3,
+): MeasurementLine | null {
+  const distance = Math.abs(endY - startY);
+  if (distance <= 0.5) return null;
+  const safeWidth = Math.max(0.0001, bedWidthCm);
+  const safeLength = Math.max(0.0001, bedLengthCm);
+  const toPercent = (value: number, total: number) => (value / total) * 100;
+  const clampPercent = (value: number) => Math.min(98, Math.max(2, value));
+  const startPercent = toPercent(Math.min(startY, endY), safeLength);
+  const endPercent = toPercent(Math.max(startY, endY), safeLength);
+  if (Math.abs(endPercent - startPercent) < 0.5) return null;
+  const constantPercent = clampPercent(toPercent(constantX, safeWidth));
+  const labelXPercent = clampPercent(constantPercent + labelXOffset);
+  const labelYPercent = (startPercent + endPercent) / 2;
+  return {
+    id,
+    orientation: "vertical",
+    startPercent,
+    endPercent,
+    constantPercent,
+    labelXPercent,
+    labelYPercent,
+    distanceCm: distance,
+  };
+}
+
+function buildMeasurementLines(
+  anchor: MeasurementAnchor | null,
+  target: MeasurementAnchor | null,
+  bedWidthCm: number,
+  bedLengthCm: number,
+) {
+  if (!anchor || !target) return [] as MeasurementLine[];
+  if (anchorsEqual(anchor, target)) return [] as MeasurementLine[];
+
+  const lines: MeasurementLine[] = [];
+  const from = { x: anchor.xCm, y: anchor.yCm };
+  const to = { x: target.xCm, y: target.yCm };
+
+  const horizontalId = `${anchor.type}-${target.type}-horizontal-${anchor.label}-${target.label}`;
+  const verticalId = `${anchor.type}-${target.type}-vertical-${anchor.label}-${target.label}`;
+
+  const pushLine = (line: MeasurementLine | null) => {
+    if (!line) return;
+    lines.push(line);
+  };
+
+  if (anchor.type === "plant" && target.type === "plant") {
+    const midY = (from.y + to.y) / 2;
+    const midX = (from.x + to.x) / 2;
+    pushLine(createHorizontalLine(horizontalId, from.x, to.x, midY, bedWidthCm, bedLengthCm));
+    pushLine(createVerticalLine(verticalId, from.y, to.y, midX, bedWidthCm, bedLengthCm));
+    return lines;
+  }
+
+  const ensureHorizontal = (startX: number, endX: number, y: number, idSuffix: string) => {
+    pushLine(createHorizontalLine(`${horizontalId}-${idSuffix}`, startX, endX, y, bedWidthCm, bedLengthCm));
+  };
+  const ensureVertical = (startY: number, endY: number, x: number, idSuffix: string) => {
+    pushLine(createVerticalLine(`${verticalId}-${idSuffix}`, startY, endY, x, bedWidthCm, bedLengthCm));
+  };
+
+  const handleEdgeToPlant = (
+    edgeAnchor: Extract<MeasurementAnchor, { type: "edge" }>,
+    plantTarget: Extract<MeasurementAnchor, { type: "plant" }>,
+  ) => {
+    if (edgeAnchor.edge === "left" || edgeAnchor.edge === "right") {
+      ensureHorizontal(edgeAnchor.xCm, plantTarget.xCm, plantTarget.yCm, `${edgeAnchor.edge}-to-plant`);
+    } else {
+      ensureVertical(edgeAnchor.yCm, plantTarget.yCm, plantTarget.xCm, `${edgeAnchor.edge}-to-plant`);
+    }
+  };
+
+  const handlePlantToEdge = (
+    plantAnchor: Extract<MeasurementAnchor, { type: "plant" }>,
+    edgeTarget: Extract<MeasurementAnchor, { type: "edge" }>,
+  ) => {
+    if (edgeTarget.edge === "left" || edgeTarget.edge === "right") {
+      ensureHorizontal(plantAnchor.xCm, edgeTarget.xCm, plantAnchor.yCm, `plant-to-${edgeTarget.edge}`);
+    } else {
+      ensureVertical(plantAnchor.yCm, edgeTarget.yCm, plantAnchor.xCm, `plant-to-${edgeTarget.edge}`);
+    }
+  };
+
+  const handleEdgeToEdge = (
+    firstEdge: Extract<MeasurementAnchor, { type: "edge" }>,
+    secondEdge: Extract<MeasurementAnchor, { type: "edge" }>,
+  ) => {
+    if (firstEdge.edge === secondEdge.edge) {
+      return;
+    }
+    if (
+      (firstEdge.edge === "left" && secondEdge.edge === "right") ||
+      (firstEdge.edge === "right" && secondEdge.edge === "left")
+    ) {
+      const y = (firstEdge.yCm + secondEdge.yCm) / 2;
+      ensureHorizontal(firstEdge.xCm, secondEdge.xCm, y, `${firstEdge.edge}-to-${secondEdge.edge}`);
+      return;
+    }
+    if (
+      (firstEdge.edge === "top" && secondEdge.edge === "bottom") ||
+      (firstEdge.edge === "bottom" && secondEdge.edge === "top")
+    ) {
+      const x = (firstEdge.xCm + secondEdge.xCm) / 2;
+      ensureVertical(firstEdge.yCm, secondEdge.yCm, x, `${firstEdge.edge}-to-${secondEdge.edge}`);
+    }
+  };
+
+  if (anchor.type === "edge" && target.type === "plant") {
+    handleEdgeToPlant(anchor, target);
+  } else if (anchor.type === "plant" && target.type === "edge") {
+    handlePlantToEdge(anchor, target);
+  } else if (anchor.type === "edge" && target.type === "edge") {
+    handleEdgeToEdge(anchor, target);
+  }
+
+  return lines;
+}
 
 type PendingPlacement = {
   bedId: string;
@@ -136,7 +329,9 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus, measu
   const [focusItems, setFocusItems] = useState(initialFocus);
   const [showFocusOnly, setShowFocusOnly] = useState(false);
   const [dragPreview, setDragPreview] = useState<DragPreview | null>(null);
-  const [showSpacingGuides, setShowSpacingGuides] = useState(false);
+  const [isMeasuring, setIsMeasuring] = useState(false);
+  const [measurementAnchor, setMeasurementAnchor] = useState<MeasurementAnchor | null>(null);
+  const [measurementTarget, setMeasurementTarget] = useState<MeasurementAnchor | null>(null);
   const bedRef = useRef<HTMLDivElement | null>(null);
   const { pushToast } = useToast();
   const lengthUnit = measurement.lengthUnit;
@@ -204,11 +399,36 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus, measu
   useEffect(() => {
     setPendingPlacement(null);
     setDragPreview(null);
+    setMeasurementAnchor(null);
+    setMeasurementTarget(null);
   }, [selectedBedId, selectedGardenId]);
 
   useEffect(() => {
     setFocusItems(initialFocus);
   }, [initialFocus]);
+
+  useEffect(() => {
+    if (!isMeasuring) {
+      setMeasurementAnchor(null);
+      setMeasurementTarget(null);
+    }
+  }, [isMeasuring]);
+
+  useEffect(() => {
+    if (!isMeasuring) return;
+    setMeasurementAnchor((current) => {
+      if (!current || current.type !== "plant") return current;
+      return displayedPlantings.some((planting) => planting.id === current.plantingId)
+        ? current
+        : null;
+    });
+    setMeasurementTarget((current) => {
+      if (!current || current.type !== "plant") return current;
+      return displayedPlantings.some((planting) => planting.id === current.plantingId)
+        ? current
+        : null;
+    });
+  }, [displayedPlantings, isMeasuring]);
 
   const filteredPlants = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -241,173 +461,43 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus, measu
     );
   }, [activeBed, focusBedIds, focusPlantIds, focusPlantingIds, showFocusOnly]);
 
-  const spacingGuides = useMemo<SpacingGuide[]>(() => {
-    if (!showSpacingGuides || !activeBed) return [];
-    if (!bedWidthCm || !bedLengthCm) return [];
-    if (!displayedPlantings.length) return [];
+  const hasPlantings = displayedPlantings.length > 0;
 
-    const safeWidth = Math.max(0.0001, bedWidthCm);
-    const safeLength = Math.max(0.0001, bedLengthCm);
-    const placements = displayedPlantings.map((planting) => {
-      const xCm = planting.positionX ?? bedWidthCm / 2;
-      const yCm = planting.positionY ?? bedLengthCm / 2;
-      return { id: planting.id, xCm, yCm };
-    });
+  const measurementLines = useMemo(
+    () =>
+      isMeasuring
+        ? buildMeasurementLines(measurementAnchor, measurementTarget, bedWidthCm, bedLengthCm)
+        : [],
+    [bedLengthCm, bedWidthCm, isMeasuring, measurementAnchor, measurementTarget],
+  );
 
-    const guides: SpacingGuide[] = [];
-    const maxGuides = 800;
-
-    const toPercent = (value: number, total: number) => (value / total) * 100;
-    const clampPercent = (value: number) => Math.min(98, Math.max(2, value));
-
-    const pushHorizontal = (
-      id: string,
-      startX: number,
-      endX: number,
-      constantY: number,
-      distance: number,
-      labelYOffset = -3,
-    ) => {
-      if (guides.length >= maxGuides) return;
-      if (distance <= 0.5) return;
-      const startPercent = toPercent(Math.min(startX, endX), safeWidth);
-      const endPercent = toPercent(Math.max(startX, endX), safeWidth);
-      if (Math.abs(endPercent - startPercent) < 0.5) return;
-      const constantPercent = clampPercent(toPercent(constantY, safeLength));
-      const labelXPercent = (startPercent + endPercent) / 2;
-      const labelYPercent = clampPercent(constantPercent + labelYOffset);
-      guides.push({
-        id,
-        orientation: "horizontal",
-        startPercent,
-        endPercent,
-        constantPercent,
-        labelXPercent,
-        labelYPercent,
-        distanceCm: distance,
-      });
-    };
-
-    const pushVertical = (
-      id: string,
-      startY: number,
-      endY: number,
-      constantX: number,
-      distance: number,
-      labelXOffset = 3,
-    ) => {
-      if (guides.length >= maxGuides) return;
-      if (distance <= 0.5) return;
-      const startPercent = toPercent(Math.min(startY, endY), safeLength);
-      const endPercent = toPercent(Math.max(startY, endY), safeLength);
-      if (Math.abs(endPercent - startPercent) < 0.5) return;
-      const constantPercent = clampPercent(toPercent(constantX, safeWidth));
-      const labelXPercent = clampPercent(constantPercent + labelXOffset);
-      const labelYPercent = (startPercent + endPercent) / 2;
-      guides.push({
-        id,
-        orientation: "vertical",
-        startPercent,
-        endPercent,
-        constantPercent,
-        labelXPercent,
-        labelYPercent,
-        distanceCm: distance,
-      });
-    };
-
-    for (let index = 0; index < placements.length; index += 1) {
-      const current = placements[index];
-
-      // Distances to bed edges (horizontal & vertical)
-      const distanceLeft = current.xCm;
-      const distanceRight = safeWidth - current.xCm;
-      if (distanceLeft <= distanceRight) {
-        const yOffset = Math.min(5, safeLength * 0.02);
-        pushHorizontal(
-          `${current.id}-edge-left`,
-          0,
-          current.xCm,
-          Math.max(0, current.yCm - yOffset),
-          distanceLeft,
-        );
-      } else {
-        const yOffset = Math.min(5, safeLength * 0.02);
-        pushHorizontal(
-          `${current.id}-edge-right`,
-          current.xCm,
-          safeWidth,
-          Math.min(safeLength, current.yCm + yOffset),
-          distanceRight,
-          3,
-        );
-      }
-
-      const distanceTop = current.yCm;
-      const distanceBottom = safeLength - current.yCm;
-      if (distanceTop <= distanceBottom) {
-        const xOffset = Math.min(5, safeWidth * 0.02);
-        pushVertical(
-          `${current.id}-edge-top`,
-          0,
-          current.yCm,
-          Math.max(0, current.xCm - xOffset),
-          distanceTop,
-          -3,
-        );
-      } else {
-        const xOffset = Math.min(5, safeWidth * 0.02);
-        pushVertical(
-          `${current.id}-edge-bottom`,
-          current.yCm,
-          safeLength,
-          Math.min(safeWidth, current.xCm + xOffset),
-          distanceBottom,
-        );
-      }
-
-      for (let inner = index + 1; inner < placements.length; inner += 1) {
-        if (guides.length >= maxGuides) {
-          return guides;
-        }
-        const comparison = placements[inner];
-        const deltaX = Math.abs(comparison.xCm - current.xCm);
-        const deltaY = Math.abs(comparison.yCm - current.yCm);
-
-        const horizontalY = (current.yCm + comparison.yCm) / 2;
-        pushHorizontal(
-          `${current.id}:${comparison.id}:horizontal`,
-          current.xCm,
-          comparison.xCm,
-          horizontalY,
-          deltaX,
-        );
-
-        const verticalX = (current.xCm + comparison.xCm) / 2;
-        pushVertical(
-          `${current.id}:${comparison.id}:vertical`,
-          current.yCm,
-          comparison.yCm,
-          verticalX,
-          deltaY,
-        );
-      }
+  const measurementSummary = useMemo(() => {
+    if (!isMeasuring) return null;
+    if (!hasPlantings) return "Add at least one plant to start measuring.";
+    if (!measurementAnchor) return "Select a bed edge or plant to start measuring distances.";
+    const anchorLabel =
+      measurementAnchor.type === "plant" ? measurementAnchor.label : `${measurementAnchor.edge} edge`;
+    if (!measurementTarget) {
+      return measurementAnchor.type === "edge"
+        ? `Now choose a plant or opposite edge to measure from the ${measurementAnchor.edge} border.`
+        : `Select another plant or edge to measure from ${anchorLabel}.`;
     }
-
-    return guides;
-  }, [
-    showSpacingGuides,
-    activeBed,
-    bedWidthCm,
-    bedLengthCm,
-    displayedPlantings,
-  ]);
-
-  useEffect(() => {
-    if (!showSpacingGuides) return;
-    if (spacingGuides.length > 0) return;
-    setShowSpacingGuides(false);
-  }, [showSpacingGuides, spacingGuides.length]);
+    const targetLabel =
+      measurementTarget.type === "plant" ? measurementTarget.label : `${measurementTarget.edge} edge`;
+    if (!measurementLines.length) {
+      return `No horizontal or vertical distance between ${anchorLabel} and ${targetLabel}.`;
+    }
+    const horizontal = measurementLines.find((line) => line.orientation === "horizontal");
+    const vertical = measurementLines.find((line) => line.orientation === "vertical");
+    const parts: string[] = [];
+    if (horizontal) {
+      parts.push(`horizontal ${formatLength(horizontal.distanceCm, lengthUnit)}`);
+    }
+    if (vertical) {
+      parts.push(`vertical ${formatLength(vertical.distanceCm, lengthUnit)}`);
+    }
+    return `Distance from ${anchorLabel} to ${targetLabel}: ${parts.join(" · ")}`;
+  }, [hasPlantings, isMeasuring, measurementAnchor, measurementTarget, measurementLines, lengthUnit]);
 
   const isActiveBedFocused = activeBed ? focusBedIds.has(activeBed.id) : false;
   const bedContainerClassName = [
@@ -464,6 +554,149 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus, measu
     },
     [focusItems, pushToast, startTransition],
   );
+
+  const toggleMeasurementMode = useCallback(() => {
+    if (!hasPlantings) return;
+    const next = !isMeasuring;
+    setIsMeasuring(next);
+    setMeasurementAnchor(null);
+    setMeasurementTarget(null);
+  }, [hasPlantings, isMeasuring]);
+
+  const handleMeasurementSelection = useCallback(
+    (selection: MeasurementAnchor) => {
+      if (!isMeasuring) return;
+      if (!measurementAnchor) {
+        setMeasurementAnchor(selection);
+        setMeasurementTarget(null);
+        return;
+      }
+      if (!measurementTarget) {
+        if (anchorsEqual(measurementAnchor, selection)) {
+          setMeasurementAnchor(selection);
+          setMeasurementTarget(null);
+          return;
+        }
+        setMeasurementTarget(selection);
+        return;
+      }
+      if (anchorsEqual(measurementAnchor, selection)) {
+        setMeasurementTarget(null);
+        return;
+      }
+      if (anchorsEqual(measurementTarget, selection)) {
+        setMeasurementAnchor(measurementTarget);
+        setMeasurementTarget(null);
+        return;
+      }
+      setMeasurementAnchor(selection);
+      setMeasurementTarget(null);
+    },
+    [isMeasuring, measurementAnchor, measurementTarget],
+  );
+
+  const handleMeasurementPlant = useCallback(
+    (planting: PlannerPlanting) => {
+      if (!isMeasuring || !activeBed) return;
+      const xCm = planting.positionX ?? activeBed.widthCm / 2;
+      const yCm = planting.positionY ?? activeBed.lengthCm / 2;
+      handleMeasurementSelection({
+        type: "plant",
+        plantingId: planting.id,
+        xCm,
+        yCm,
+        label: planting.plantName,
+      });
+    },
+    [activeBed, handleMeasurementSelection, isMeasuring],
+  );
+
+  const handleMeasurementEdgeClick = useCallback(
+    (event: MouseEvent<HTMLButtonElement>, edge: MeasurementEdge) => {
+      if (!isMeasuring || !activeBed) return;
+      event.stopPropagation();
+      const rect = bedRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const clampRatio = (value: number) => Math.min(1, Math.max(0, value));
+      let xCm = edge === "right" ? activeBed.widthCm : 0;
+      let yCm = edge === "bottom" ? activeBed.lengthCm : 0;
+      if (edge === "left" || edge === "right") {
+        const ratio = clampRatio((event.clientY - rect.top) / rect.height);
+        yCm = ratio * activeBed.lengthCm;
+      } else {
+        const ratio = clampRatio((event.clientX - rect.left) / rect.width);
+        xCm = ratio * activeBed.widthCm;
+      }
+      handleMeasurementSelection({ type: "edge", edge, xCm, yCm, label: edge });
+    },
+    [activeBed, handleMeasurementSelection, isMeasuring],
+  );
+
+  const totalBedPlantings = activeBed?.plantings.length ?? 0;
+
+  const handleAutoLayout = useCallback(() => {
+    if (!activeBed || !activeBed.plantings.length) return;
+    const width = Math.max(1, activeBed.widthCm);
+    const length = Math.max(1, activeBed.lengthCm);
+    const plantings = [...activeBed.plantings];
+    const count = plantings.length;
+    if (!count) return;
+    const aspectRatio = width / length;
+    const columns = Math.min(count, Math.max(1, Math.round(Math.sqrt(count * aspectRatio))));
+    const rows = Math.max(1, Math.ceil(count / columns));
+    const spacingX = width / (columns + 1);
+    const spacingY = length / (rows + 1);
+    const updates = plantings.map((planting, index) => {
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      const x = Math.min(width, Math.max(spacingX, (column + 1) * spacingX));
+      const y = Math.min(length, Math.max(spacingY, (row + 1) * spacingY));
+      return { id: planting.id, x, y };
+    });
+
+    setMeasurementAnchor(null);
+    setMeasurementTarget(null);
+    setIsMeasuring(false);
+
+    startTransition(async () => {
+      try {
+        const responses = await Promise.all(
+          updates.map(({ id, x, y }) =>
+            fetch("/api/plantings", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id, positionX: x, positionY: y }),
+            }),
+          ),
+        );
+        const failure = responses.find((response) => !response.ok);
+        if (failure) {
+          const data = await failure
+            .json()
+            .catch(() => ({ error: "Unable to rearrange plants" }));
+          pushToast({
+            title: "Could not rearrange plants",
+            description:
+              typeof data.error === "string" ? data.error : "Unable to rearrange plants.",
+            variant: "error",
+          });
+          return;
+        }
+        pushToast({
+          title: "Plants rearranged",
+          description: "We redistributed plant positions across the bed grid.",
+          variant: "success",
+        });
+        router.refresh();
+      } catch (error) {
+        pushToast({
+          title: "Could not rearrange plants",
+          description: "Something went wrong while updating plant positions.",
+          variant: "error",
+        });
+      }
+    });
+  }, [activeBed, pushToast, router, startTransition]);
 
   const handleCreateBed = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1115,15 +1348,27 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus, measu
             ) : null}
             <button
               type="button"
-              onClick={() => displayedPlantings.length && setShowSpacingGuides((value) => !value)}
-              disabled={!displayedPlantings.length}
+              onClick={toggleMeasurementMode}
+              disabled={!hasPlantings}
               className={`rounded px-3 py-1 text-xs font-semibold uppercase tracking-wide transition ${
-                showSpacingGuides
+                isMeasuring
                   ? "bg-slate-900 text-white"
                   : "border border-slate-700 text-slate-700 hover:border-slate-900 hover:text-slate-900"
-              } ${!displayedPlantings.length ? "cursor-not-allowed opacity-40" : ""}`}
+              } ${!hasPlantings ? "cursor-not-allowed opacity-40" : ""}`}
             >
-              {showSpacingGuides ? "Hide spacing guides" : "Show spacing guides"}
+              {isMeasuring ? "Exit measure mode" : "Measure spacing"}
+            </button>
+            <button
+              type="button"
+              onClick={handleAutoLayout}
+              disabled={totalBedPlantings === 0 || isPending}
+              className={`rounded px-3 py-1 text-xs font-semibold uppercase tracking-wide transition ${
+                totalBedPlantings === 0 || isPending
+                  ? "cursor-not-allowed border border-slate-200 text-slate-300"
+                  : "border border-primary text-primary hover:bg-primary hover:text-white"
+              }`}
+            >
+              Rearrange plants
             </button>
           </div>
         </div>
@@ -1201,55 +1446,85 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus, measu
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                 >
-                  <div className="pointer-events-none absolute inset-0">
-                    <div className="absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded bg-white/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 shadow-sm">
-                      Width: {formatLength(bedWidthCm, lengthUnit)}
-                    </div>
-                    <div className="absolute right-2 top-1/2 z-20 -translate-y-1/2 -rotate-90 rounded bg-white/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 shadow-sm">
-                      Length: {formatLength(bedLengthCm, lengthUnit)}
-                    </div>
-                    {bedGrid ? (
-                      <div className="absolute bottom-2 left-2 z-20 rounded bg-white/80 px-2 py-0.5 text-[10px] font-medium text-slate-600 shadow-sm">
-                        Grid: {formatLength(bedGrid.cellCm, lengthUnit)}
-                      </div>
-                    ) : null}
-                  </div>
-                  {showSpacingGuides ? (
-                    <SpacingGuideOverlay
-                      guides={spacingGuides}
+                  {isMeasuring ? (
+                    <MeasurementOverlay
+                      lines={measurementLines}
                       formatDistance={(value) => formatLength(value, lengthUnit)}
+                      anchor={measurementAnchor}
+                      target={measurementTarget}
+                      bedWidthCm={bedWidthCm}
+                      bedLengthCm={bedLengthCm}
                     />
+                  ) : null}
+                  {isMeasuring ? (
+                    <>
+                      <button
+                        type="button"
+                        className="absolute inset-x-0 top-0 h-4 cursor-crosshair bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                        aria-label="Measure from top edge"
+                        onClick={(event) => handleMeasurementEdgeClick(event, "top")}
+                      />
+                      <button
+                        type="button"
+                        className="absolute inset-x-0 bottom-0 h-4 cursor-crosshair bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                        aria-label="Measure from bottom edge"
+                        onClick={(event) => handleMeasurementEdgeClick(event, "bottom")}
+                      />
+                      <button
+                        type="button"
+                        className="absolute inset-y-0 left-0 w-4 cursor-crosshair bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                        aria-label="Measure from left edge"
+                        onClick={(event) => handleMeasurementEdgeClick(event, "left")}
+                      />
+                      <button
+                        type="button"
+                        className="absolute inset-y-0 right-0 w-4 cursor-crosshair bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                        aria-label="Measure from right edge"
+                        onClick={(event) => handleMeasurementEdgeClick(event, "right")}
+                      />
+                    </>
                   ) : null}
                   {displayedPlantings.map((planting) => {
                     const left = planting.positionX ?? bedWidthCm / 2;
                     const top = planting.positionY ?? bedLengthCm / 2;
                     const leftPercent = (left / bedWidthCm) * 100;
                     const topPercent = (top / bedLengthCm) * 100;
-                    const isPlantingFocused =
-                      isActiveBedFocused ||
-                      focusPlantingIds.has(planting.id) ||
-                      focusPlantIds.has(planting.plantId);
-                    return (
-                      <PlantingMarker
-                        key={planting.id}
-                        planting={planting}
-                        leftPercent={leftPercent}
-                        topPercent={topPercent}
-                        iconSize={bedIconSizePx}
-                        onDelete={handleDeletePlanting}
-                        onUpdateDetails={handleUpdatePlantingDetails}
-                        onToggleFocus={() => toggleFocus("planting", planting.id, planting.plantName)}
-                        isFocused={isPlantingFocused}
-                        dimmed={!isPlantingFocused && focusItems.length > 0 && !showFocusOnly}
-                        bedId={activeBed.id}
-                        bedWidthCm={bedWidthCm}
-                        bedLengthCm={bedLengthCm}
-                        bedRef={bedRef}
-                        onDragPreview={(preview) => setDragPreview(preview)}
-                        isPending={isPending}
-                      />
-                    );
-                  })}
+                  const isPlantingFocused =
+                    isActiveBedFocused ||
+                    focusPlantingIds.has(planting.id) ||
+                    focusPlantIds.has(planting.plantId);
+                  const measurementRole =
+                    isMeasuring && measurementAnchor?.type === "plant" && measurementAnchor.plantingId === planting.id
+                      ? "anchor"
+                      : isMeasuring &&
+                          measurementTarget?.type === "plant" &&
+                          measurementTarget.plantingId === planting.id
+                        ? "target"
+                        : null;
+                  return (
+                    <PlantingMarker
+                      key={planting.id}
+                      planting={planting}
+                      leftPercent={leftPercent}
+                      topPercent={topPercent}
+                      iconSize={bedIconSizePx}
+                      onDelete={handleDeletePlanting}
+                      onUpdateDetails={handleUpdatePlantingDetails}
+                      onToggleFocus={() => toggleFocus("planting", planting.id, planting.plantName)}
+                      isFocused={isPlantingFocused}
+                      dimmed={!isPlantingFocused && focusItems.length > 0 && !showFocusOnly}
+                      bedId={activeBed.id}
+                      bedWidthCm={bedWidthCm}
+                      bedLengthCm={bedLengthCm}
+                      bedRef={bedRef}
+                      onDragPreview={(preview) => setDragPreview(preview)}
+                      isPending={isPending}
+                      measurementMode={isMeasuring}
+                      measurementRole={measurementRole}
+                      onMeasureSelect={handleMeasurementPlant}
+                    />
+                  );
+                })}
                   {dragPreview && dragPreview.bedId === activeBed.id ? (
                     <>
                       <div className="pointer-events-none absolute inset-0">
@@ -1357,11 +1632,29 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus, measu
                 </div>
               </div>
             </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+              <span className="rounded bg-white px-2 py-0.5 shadow-sm">
+                Width: {formatLength(bedWidthCm, lengthUnit)}
+              </span>
+              <span className="rounded bg-white px-2 py-0.5 shadow-sm">
+                Length: {formatLength(bedLengthCm, lengthUnit)}
+              </span>
+              {bedGrid ? (
+                <span className="rounded bg-white px-2 py-0.5 shadow-sm">
+                  Grid: {formatLength(bedGrid.cellCm, lengthUnit)}
+                </span>
+              ) : null}
+            </div>
+            {isMeasuring ? (
+              <p className="mt-2 text-xs text-slate-600">
+                {measurementSummary ?? "Click the bed edges or a plant to measure distances."}
+              </p>
+            ) : null}
             <div className="mt-2 text-center text-xs font-medium text-slate-500">
               {isPending
                 ? "Saving changes…"
                 : displayedPlantings.length
-                ? "Toggle spacing guides to inspect layout clearances."
+                ? "Toggle measure mode to inspect spacing or use auto layout to redistribute plantings."
                 : "Drag plants into the bed to start planning."}
             </div>
           </>
@@ -1453,6 +1746,9 @@ type PlantingMarkerProps = {
   bedRef: RefObject<HTMLDivElement>;
   onDragPreview: (preview: DragPreview | null) => void;
   isPending: boolean;
+  measurementMode: boolean;
+  measurementRole: "anchor" | "target" | null;
+  onMeasureSelect: (planting: PlannerPlanting) => void;
 };
 
 
@@ -1472,6 +1768,9 @@ function PlantingMarker({
   bedRef,
   onDragPreview,
   isPending,
+  measurementMode,
+  measurementRole,
+  onMeasureSelect,
 }: PlantingMarkerProps) {
   const startDate = useMemo(() => new Date(planting.startDate), [planting.startDate]);
   const [draftDate, setDraftDate] = useState(startDate.toISOString().slice(0, 10));
@@ -1560,16 +1859,25 @@ function PlantingMarker({
   }, []);
 
   const scheduleClose = useCallback(() => {
+    if (measurementMode) return;
     cancelClose();
     closeTimer.current = window.setTimeout(() => setIsPopoverOpen(false), 120);
-  }, [cancelClose]);
+  }, [cancelClose, measurementMode]);
 
   const openPopover = useCallback(() => {
+    if (measurementMode) return;
     cancelClose();
     setIsPopoverOpen(true);
-  }, [cancelClose]);
+  }, [cancelClose, measurementMode]);
+
+  useEffect(() => {
+    if (!measurementMode) return;
+    cancelClose();
+    setIsPopoverOpen(false);
+  }, [cancelClose, measurementMode]);
 
   const handleBlur = (event: FocusEvent<HTMLDivElement>) => {
+    if (measurementMode) return;
     const next = event.relatedTarget as Node | null;
     if (next && (popoverRef.current?.contains(next) || markerRef.current?.contains(next))) {
       return;
@@ -1612,9 +1920,19 @@ function PlantingMarker({
     [bedId, bedLengthCm, bedWidthCm, leftPercent, planting.positionX, planting.positionY, topPercent],
   );
 
+  const ringClass = measurementMode
+    ? measurementRole === "anchor"
+      ? "ring-2 ring-amber-500"
+      : measurementRole === "target"
+        ? "ring-2 ring-emerald-500"
+        : "ring-2 ring-slate-300"
+    : isFocused
+      ? "ring-2 ring-primary"
+      : "ring-2 ring-slate-200";
   const markerClasses = [
-    "flex items-center justify-center rounded-full border border-white bg-white text-xs font-semibold uppercase text-primary shadow cursor-move",
-    isFocused ? "ring-2 ring-primary" : "ring-2 ring-slate-200",
+    "flex items-center justify-center rounded-full border border-white bg-white text-xs font-semibold uppercase text-primary shadow transition",
+    ringClass,
+    measurementMode ? "cursor-crosshair" : "cursor-move",
     dimmed ? "opacity-70" : "",
   ]
     .filter(Boolean)
@@ -1635,12 +1953,20 @@ function PlantingMarker({
           onMouseLeave={scheduleClose}
           onFocus={openPopover}
           onBlur={handleBlur}
+          onKeyDown={(event) => {
+            if (!measurementMode) return;
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              onMeasureSelect(planting);
+            }
+          }}
         >
           <div
             className={markerClasses}
             style={{ width: iconSize, height: iconSize }}
-            draggable
+            draggable={!measurementMode}
             onDragStart={(event) => {
+              if (measurementMode) return;
               event.dataTransfer.setData(
                 "application/garden-planting",
                 JSON.stringify({ plantingId: planting.id }),
@@ -1648,7 +1974,16 @@ function PlantingMarker({
               event.dataTransfer.effectAllowed = "move";
               onDragPreview(preview);
             }}
-            onDragEnd={() => onDragPreview(null)}
+            onDragEnd={() => {
+              if (measurementMode) return;
+              onDragPreview(null);
+            }}
+            onClick={(event) => {
+              if (!measurementMode) return;
+              event.preventDefault();
+              event.stopPropagation();
+              onMeasureSelect(planting);
+            }}
           >
             {planting.imageUrl ? (
               <Image
@@ -1764,97 +2099,86 @@ function PlantingMarker({
   );
 }
 
-type SpacingGuideOverlayProps = {
-  guides: SpacingGuide[];
+type MeasurementOverlayProps = {
+  lines: MeasurementLine[];
   formatDistance: (valueCm: number) => string;
+  anchor: MeasurementAnchor | null;
+  target: MeasurementAnchor | null;
+  bedWidthCm: number;
+  bedLengthCm: number;
 };
 
-function SpacingGuideOverlay({ guides, formatDistance }: SpacingGuideOverlayProps) {
-  const [hoveredGuideId, setHoveredGuideId] = useState<string | null>(null);
-  const [pinnedGuideId, setPinnedGuideId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!guides.length) {
-      setHoveredGuideId(null);
-      setPinnedGuideId(null);
-      return;
-    }
-    setPinnedGuideId((current) => {
-      if (!current) return current;
-      return guides.some((guide) => guide.id === current) ? current : null;
-    });
-  }, [guides]);
-
-  if (!guides.length) {
+function MeasurementOverlay({
+  lines,
+  formatDistance,
+  anchor,
+  target,
+  bedWidthCm,
+  bedLengthCm,
+}: MeasurementOverlayProps) {
+  if (!lines.length && !anchor && !target) {
     return null;
   }
 
+  const safeWidth = Math.max(0.0001, bedWidthCm);
+  const safeLength = Math.max(0.0001, bedLengthCm);
+  const toPercent = (value: number, total: number) => (value / total) * 100;
+  const clampPercent = (value: number) => Math.min(99, Math.max(1, value));
+  const markerSources = [anchor, target].filter((entry): entry is MeasurementAnchor => Boolean(entry));
+  const markers = markerSources.filter(
+    (marker, index, array) =>
+      array.findIndex((candidate) => anchorsEqual(marker, candidate)) === index,
+  );
+
   return (
-    <div className="absolute inset-0 z-10">
-      <svg
-        className="absolute inset-0 h-full w-full"
-        viewBox="0 0 100 100"
-        preserveAspectRatio="none"
-      >
-        {guides.map((guide) => {
-          const isActive = hoveredGuideId === guide.id || pinnedGuideId === guide.id;
-          const stroke = isActive ? "rgba(14, 116, 144, 0.9)" : "rgba(13, 148, 136, 0.55)";
-          const strokeWidth = isActive ? 1.4 : 0.9;
+    <div className="pointer-events-none absolute inset-0 z-10">
+      <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+        {lines.map((line) => {
           const lineProps =
-            guide.orientation === "horizontal"
+            line.orientation === "horizontal"
               ? {
-                  x1: guide.startPercent,
-                  y1: guide.constantPercent,
-                  x2: guide.endPercent,
-                  y2: guide.constantPercent,
+                  x1: line.startPercent,
+                  y1: line.constantPercent,
+                  x2: line.endPercent,
+                  y2: line.constantPercent,
                 }
               : {
-                  x1: guide.constantPercent,
-                  y1: guide.startPercent,
-                  x2: guide.constantPercent,
-                  y2: guide.endPercent,
+                  x1: line.constantPercent,
+                  y1: line.startPercent,
+                  x2: line.constantPercent,
+                  y2: line.endPercent,
                 };
           return (
             <line
-              key={guide.id}
+              key={line.id}
               {...lineProps}
-              stroke={stroke}
-              strokeWidth={strokeWidth}
-              strokeDasharray="4 3"
+              stroke="rgba(13, 148, 136, 0.7)"
+              strokeWidth={0.9}
+              strokeDasharray="3 3"
               strokeLinecap="round"
-              className="cursor-pointer outline-none"
-              style={{ pointerEvents: "stroke" }}
-              onMouseEnter={() => setHoveredGuideId(guide.id)}
-              onMouseLeave={() => setHoveredGuideId(null)}
-              onFocus={() => setHoveredGuideId(guide.id)}
-              onBlur={() => setHoveredGuideId(null)}
-              onClick={(event) => {
-                event.stopPropagation();
-                setPinnedGuideId((current) => (current === guide.id ? null : guide.id));
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  setPinnedGuideId((current) => (current === guide.id ? null : guide.id));
-                }
-              }}
-              tabIndex={0}
-              role="button"
-              aria-label={`Distance ${formatDistance(guide.distanceCm)}`}
             />
           );
         })}
       </svg>
-      {guides.map((guide) => {
-        const isActive = hoveredGuideId === guide.id || pinnedGuideId === guide.id;
-        if (!isActive) return null;
+      {lines.map((line) => (
+        <div
+          key={`${line.id}-label`}
+          className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-slate-900/90 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white shadow"
+          style={{ left: `${line.labelXPercent}%`, top: `${line.labelYPercent}%` }}
+        >
+          {formatDistance(line.distanceCm)}
+        </div>
+      ))}
+      {markers.map((marker) => {
+        const leftPercent = clampPercent(toPercent(marker.xCm, safeWidth));
+        const topPercent = clampPercent(toPercent(marker.yCm, safeLength));
         return (
           <div
-            key={`${guide.id}-label`}
-            className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-slate-900/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white shadow"
-            style={{ left: `${guide.labelXPercent}%`, top: `${guide.labelYPercent}%` }}
+            key={`measurement-marker-${marker.type}-${marker.type === "plant" ? marker.plantingId : marker.edge}-${leftPercent}-${topPercent}`}
+            className="pointer-events-none absolute z-30 -translate-x-1/2 -translate-y-1/2"
+            style={{ left: `${leftPercent}%`, top: `${topPercent}%` }}
           >
-            {formatDistance(guide.distanceCm)}
+            <span className="block h-2 w-2 rounded-full border border-white bg-teal-500 shadow" />
           </div>
         );
       })}
