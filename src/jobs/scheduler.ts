@@ -281,15 +281,111 @@ type UserRuleContext = {
   plantsById: Map<string, { id: string; commonName: string }>;
 };
 
+type NotificationPreferenceSettings = {
+  emailEnabled: boolean;
+  pushEnabled: boolean;
+  inAppEnabled: boolean;
+  emailDigestHour: number;
+  emailDigestTimezone: string | null;
+  dndEnabled: boolean;
+  dndStartHour: number | null;
+  dndEndHour: number | null;
+};
+
+const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferenceSettings = {
+  emailEnabled: true,
+  pushEnabled: true,
+  inAppEnabled: true,
+  emailDigestHour: 7,
+  emailDigestTimezone: null,
+  dndEnabled: false,
+  dndStartHour: null,
+  dndEndHour: null,
+};
+
+function normalizePreferences(
+  preference:
+    | {
+        emailEnabled: boolean;
+        pushEnabled: boolean;
+        inAppEnabled: boolean;
+        emailDigestHour: number;
+        emailDigestTimezone: string | null;
+        dndEnabled: boolean;
+        dndStartHour: number | null;
+        dndEndHour: number | null;
+      }
+    | null
+    | undefined,
+): NotificationPreferenceSettings {
+  if (!preference) {
+    return { ...DEFAULT_NOTIFICATION_PREFERENCES };
+  }
+  return {
+    emailEnabled: preference.emailEnabled,
+    pushEnabled: preference.pushEnabled,
+    inAppEnabled: preference.inAppEnabled,
+    emailDigestHour: preference.emailDigestHour,
+    emailDigestTimezone: preference.emailDigestTimezone,
+    dndEnabled: preference.dndEnabled,
+    dndStartHour: preference.dndStartHour,
+    dndEndHour: preference.dndEndHour,
+  };
+}
+
+function localHour(reference: Date, timeZone: string): number {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    hour12: false,
+    timeZone,
+  });
+  const parts = formatter.formatToParts(reference);
+  const hourPart = parts.find((part) => part.type === "hour");
+  return hourPart ? Number.parseInt(hourPart.value, 10) : reference.getUTCHours();
+}
+
+function shouldMuteChannel(
+  reference: Date,
+  channel: "email" | "push" | "inapp",
+  preferences: NotificationPreferenceSettings,
+  timeZone: string,
+): boolean {
+  if (channel === "email" && !preferences.emailEnabled) return true;
+  if (channel === "push" && !preferences.pushEnabled) return true;
+  if (channel === "inapp" && !preferences.inAppEnabled) return true;
+  if (!preferences.dndEnabled) return false;
+  if (channel === "inapp") return false;
+  const start = preferences.dndStartHour;
+  const end = preferences.dndEndHour;
+  if (start == null || end == null) return false;
+  const hour = localHour(reference, timeZone);
+  if (start === end) return true;
+  if (start < end) {
+    return hour >= start && hour < end;
+  }
+  return hour >= start || hour < end;
+}
+
 export async function evaluateNotificationRules(reference = new Date()) {
   const users = await prisma.user.findMany({
-    where: { email: { not: null } },
     select: {
       id: true,
       email: true,
       name: true,
       locationLat: true,
       locationLon: true,
+      notificationPreference: {
+        select: {
+          emailEnabled: true,
+          pushEnabled: true,
+          inAppEnabled: true,
+          emailDigestHour: true,
+          emailDigestTimezone: true,
+          dndEnabled: true,
+          dndStartHour: true,
+          dndEndHour: true,
+        },
+      },
     },
   });
 
@@ -334,10 +430,12 @@ export async function evaluateNotificationRules(reference = new Date()) {
       plantings: plantings as UserRuleContext["plantings"],
       plantsById: new Map(plants.map((plant) => [plant.id, plant])),
     };
+    const preferences = normalizePreferences(user.notificationPreference);
+    const timeZone = preferences.emailDigestTimezone ?? weather?.timezone ?? "UTC";
 
     for (const rule of rules) {
       try {
-        await evaluateRuleForUser(reference, user, rule, context);
+        await evaluateRuleForUser(reference, user, rule, context, preferences, timeZone);
       } catch (error) {
         console.error(`[Gardenit] Rule ${rule.name} failed`, error);
       }
@@ -375,22 +473,24 @@ async function evaluateRuleForUser(
     throttleSecs: number;
   },
   context: UserRuleContext,
+  preferences: NotificationPreferenceSettings,
+  timeZone: string,
 ) {
   switch (rule.type) {
     case "time":
-      await evaluateTimeRule(reference, user, rule, context);
+      await evaluateTimeRule(reference, user, rule, context, preferences, timeZone);
       break;
     case "weather":
-      await evaluateWeatherRule(reference, user, rule, context);
+      await evaluateWeatherRule(reference, user, rule, context, preferences, timeZone);
       break;
     case "soil":
-      await evaluateSoilRule(reference, user, rule, context);
+      await evaluateSoilRule(reference, user, rule, context, preferences, timeZone);
       break;
     case "phenology":
-      await evaluatePhenologyRule(reference, user, rule, context);
+      await evaluatePhenologyRule(reference, user, rule, context, preferences, timeZone);
       break;
     case "garden":
-      await evaluateGardenRule(reference, user, rule, context);
+      await evaluateGardenRule(reference, user, rule, context, preferences, timeZone);
       break;
     default:
       break;
@@ -402,6 +502,8 @@ async function evaluateTimeRule(
   user: { id: string; email: string | null; name: string | null },
   rule: { id: string; schedule: string | null; params: Record<string, unknown>; throttleSecs: number },
   context: UserRuleContext,
+  preferences: NotificationPreferenceSettings,
+  timeZone: string,
 ) {
   if (!rule.schedule) return;
   const weatherTz = context.weather?.timezone ?? "UTC";
@@ -416,16 +518,23 @@ async function evaluateTimeRule(
 
   for (const action of actions) {
     if (action.do === "digest") {
-      await dispatchDigest(reference, user, rule, context);
+      await dispatchDigest(reference, user, rule, context, preferences, timeZone);
     }
     if (action.do === "notify") {
-      await dispatchNotification(reference, user, rule, {
-        title: String(action.title ?? "Reminder"),
-        body: String(action.body ?? ""),
-        severity: (action.severity as "info" | "warning" | "critical") ?? "info",
-        channel: (action.channel as "email" | "inapp" | "push") ?? "inapp",
-        meta: { action },
-      });
+      await dispatchNotification(
+        reference,
+        user,
+        rule,
+        {
+          title: String(action.title ?? "Reminder"),
+          body: String(action.body ?? ""),
+          severity: (action.severity as "info" | "warning" | "critical") ?? "info",
+          channel: (action.channel as "email" | "inapp" | "push") ?? "inapp",
+          meta: { action },
+        },
+        preferences,
+        timeZone,
+      );
     }
   }
 }
@@ -435,8 +544,10 @@ async function dispatchDigest(
   user: { id: string; email: string | null; name: string | null },
   rule: { id: string; throttleSecs: number },
   context: UserRuleContext,
+  preferences: NotificationPreferenceSettings,
+  timeZone: string,
 ) {
-  if (!user.email) return;
+  if (!user.email || shouldMuteChannel(reference, "email", preferences, timeZone)) return;
   const since = new Date(reference.getTime() - rule.throttleSecs * 1000);
   const existing = await prisma.notification.findFirst({
     where: { userId: user.id, ruleId: rule.id, dueAt: { gte: since } },
@@ -485,12 +596,14 @@ async function evaluateWeatherRule(
   user: { id: string; email: string | null; name: string | null },
   rule: { id: string; params: Record<string, unknown>; throttleSecs: number },
   context: UserRuleContext,
+  preferences: NotificationPreferenceSettings,
+  timeZone: string,
 ) {
   if (!context.weather) return;
   const params = rule.params as Record<string, unknown>;
   if (typeof params.precipProbNext24hGte === "number") {
     if (context.weather.precipProbNext24h >= params.precipProbNext24hGte) {
-      await handleWeatherActions(reference, user, rule, context, params.actions);
+      await handleWeatherActions(reference, user, rule, context, preferences, timeZone, params.actions);
       return;
     }
   }
@@ -500,7 +613,7 @@ async function evaluateWeatherRule(
       (typeof params.minTempLte !== "number" ||
         (context.weather.minTempNext24h ?? Number.POSITIVE_INFINITY) <= params.minTempLte);
     if (frostOk) {
-      await handleWeatherActions(reference, user, rule, context, params.actions, {
+      await handleWeatherActions(reference, user, rule, context, preferences, timeZone, params.actions, {
         focusOnly: true,
       });
       return;
@@ -508,13 +621,15 @@ async function evaluateWeatherRule(
   }
   if (typeof params.maxTempTomorrowGte === "number") {
     if ((context.weather.maxTempTomorrow ?? -Infinity) >= params.maxTempTomorrowGte) {
-      await handleWeatherActions(reference, user, rule, context, params.actions);
+      await handleWeatherActions(reference, user, rule, context, preferences, timeZone, params.actions);
       return;
     }
   }
   if (typeof params.gustsNext24hGte === "number") {
     if ((context.weather.gustsNext24h ?? 0) >= params.gustsNext24hGte) {
-      await handleWeatherActions(reference, user, rule, context, params.actions, { focusOnly: true });
+      await handleWeatherActions(reference, user, rule, context, preferences, timeZone, params.actions, {
+        focusOnly: true,
+      });
     }
   }
 }
@@ -524,6 +639,8 @@ async function handleWeatherActions(
   user: { id: string; email: string | null; name: string | null },
   rule: { id: string; throttleSecs: number },
   context: UserRuleContext,
+  preferences: NotificationPreferenceSettings,
+  timeZone: string,
   actions: unknown,
   options: { focusOnly?: boolean } = {},
 ) {
@@ -550,13 +667,20 @@ async function handleWeatherActions(
       });
     }
     if (typed.do === "notify") {
-      await dispatchNotification(reference, user, rule, {
-        title: String(typed.title ?? "Weather alert"),
-        body: String(typed.body ?? ""),
-        severity: (typed.severity as "info" | "warning" | "critical") ?? "info",
-        channel: (typed.channel as "inapp" | "email" | "push") ?? "inapp",
-        meta: { focusOnly: options.focusOnly ?? false },
-      });
+      await dispatchNotification(
+        reference,
+        user,
+        rule,
+        {
+          title: String(typed.title ?? "Weather alert"),
+          body: String(typed.body ?? ""),
+          severity: (typed.severity as "info" | "warning" | "critical") ?? "info",
+          channel: (typed.channel as "inapp" | "email" | "push") ?? "inapp",
+          meta: { focusOnly: options.focusOnly ?? false },
+        },
+        preferences,
+        timeZone,
+      );
     }
   }
 }
@@ -566,6 +690,8 @@ async function evaluateSoilRule(
   user: { id: string; email: string | null; name: string | null },
   rule: { id: string; params: Record<string, unknown>; throttleSecs: number },
   context: UserRuleContext,
+  preferences: NotificationPreferenceSettings,
+  timeZone: string,
 ) {
   if (!context.weather?.soilTemp10cm) return;
   const params = rule.params as Record<string, unknown>;
@@ -577,15 +703,22 @@ async function evaluateSoilRule(
       species.some((spec) => planting.plant.commonName.toLowerCase().includes(spec)),
     );
     if (!relevantPlantings.length) return;
-    await dispatchNotification(reference, user, rule, {
-      title: "Warm enough to sow beans",
-      body: `Soil is ${context.weather.soilTemp10cm.toFixed(1)}°C — ideal for ${relevantPlantings
-        .map((planting) => planting.plant.commonName)
-        .join(", ")}.`,
-      severity: "info",
-      channel: "inapp",
-      meta: { plantings: relevantPlantings.map((planting) => planting.id) },
-    });
+    await dispatchNotification(
+      reference,
+      user,
+      rule,
+      {
+        title: "Warm enough to sow beans",
+        body: `Soil is ${context.weather.soilTemp10cm.toFixed(1)}°C — ideal for ${relevantPlantings
+          .map((planting) => planting.plant.commonName)
+          .join(", ")}.`,
+        severity: "info",
+        channel: "inapp",
+        meta: { plantings: relevantPlantings.map((planting) => planting.id) },
+      },
+      preferences,
+      timeZone,
+    );
   }
 }
 
@@ -594,6 +727,8 @@ async function evaluatePhenologyRule(
   user: { id: string; email: string | null; name: string | null },
   rule: { id: string; params: Record<string, unknown>; throttleSecs: number },
   context: UserRuleContext,
+  preferences: NotificationPreferenceSettings,
+  timeZone: string,
 ) {
   const params = rule.params as Record<string, unknown>;
   const threshold = typeof params.maturityGDDPctGte === "number" ? params.maturityGDDPctGte : 0.8;
@@ -604,13 +739,20 @@ async function evaluatePhenologyRule(
     return ratio >= threshold;
   });
   if (!nearing.length) return;
-  await dispatchNotification(reference, user, rule, {
-    title: "Carrots nearing harvest window",
-    body: `Check ${nearing.map((planting) => planting.plant.commonName).join(", ")} for harvest readiness.`,
-    severity: "info",
-    channel: "email",
-    meta: { plantings: nearing.map((planting) => planting.id) },
-  });
+  await dispatchNotification(
+    reference,
+    user,
+    rule,
+    {
+      title: "Carrots nearing harvest window",
+      body: `Check ${nearing.map((planting) => planting.plant.commonName).join(", ")} for harvest readiness.`,
+      severity: "info",
+      channel: "email",
+      meta: { plantings: nearing.map((planting) => planting.id) },
+    },
+    preferences,
+    timeZone,
+  );
 }
 
 async function evaluateGardenRule(
@@ -618,6 +760,8 @@ async function evaluateGardenRule(
   user: { id: string; email: string | null; name: string | null },
   rule: { id: string; params: Record<string, unknown>; throttleSecs: number },
   context: UserRuleContext,
+  preferences: NotificationPreferenceSettings,
+  timeZone: string,
 ) {
   const params = rule.params as Record<string, unknown>;
   const overdueHours = typeof params.overdueTaskHoursGte === "number" ? params.overdueTaskHoursGte : 48;
@@ -630,13 +774,20 @@ async function evaluateGardenRule(
     return context.focusItems.some((item) => item.kind === "task" && item.targetId === reminder.id);
   });
   if (!overdue.length) return;
-  await dispatchNotification(reference, user, rule, {
-    title: "Focus tasks overdue",
-    body: overdue.map((reminder) => `• ${reminder.title} (${reminder.dueAt.toLocaleString()})`).join("\n"),
-    severity: "warning",
-    channel: "inapp",
-    meta: { reminders: overdue.map((reminder) => reminder.id) },
-  });
+  await dispatchNotification(
+    reference,
+    user,
+    rule,
+    {
+      title: "Focus tasks overdue",
+      body: overdue.map((reminder) => `• ${reminder.title} (${reminder.dueAt.toLocaleString()})`).join("\n"),
+      severity: "warning",
+      channel: "inapp",
+      meta: { reminders: overdue.map((reminder) => reminder.id) },
+    },
+    preferences,
+    timeZone,
+  );
 }
 
 async function dispatchNotification(
@@ -650,7 +801,15 @@ async function dispatchNotification(
     channel: "inapp" | "email" | "push";
     meta?: Record<string, unknown>;
   },
+  preferences: NotificationPreferenceSettings,
+  timeZone: string,
 ) {
+  if (shouldMuteChannel(reference, payload.channel, preferences, timeZone)) {
+    return null;
+  }
+  if ((payload.channel === "email" || payload.channel === "push") && !user.email) {
+    return null;
+  }
   const since = new Date(reference.getTime() - rule.throttleSecs * 1000);
   const existing = await prisma.notification.findFirst({
     where: { userId: user.id, ruleId: rule.id, dueAt: { gte: since } },

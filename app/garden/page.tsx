@@ -5,12 +5,26 @@ import { getPlants } from "@/src/server/plant-service";
 import { GardenPlanner } from "@/src/components/garden/garden-planner";
 import { getFocusItemsByUser } from "@/src/server/focus-service";
 import { CreateGardenForm } from "@/src/components/garden/create-garden-form";
+import { DEFAULT_MEASUREMENT_PREFERENCES } from "@/src/lib/units";
+import { getMeasurementPreferencesByUser } from "@/src/server/measurement-preference-service";
 
 export default async function GardenPage() {
   const session = await auth();
   const gardens = session?.user?.id ? await getGardensForUser(session.user.id) : [];
   const focusItems = session?.user?.id ? await getFocusItemsByUser(session.user.id) : [];
   const plants = await getPlants();
+  const measurementSnapshot = session?.user?.id
+    ? await getMeasurementPreferencesByUser(session.user.id)
+    : null;
+  const measurement = measurementSnapshot
+    ? {
+        temperatureUnit: measurementSnapshot.temperatureUnit,
+        windSpeedUnit: measurementSnapshot.windSpeedUnit,
+        pressureUnit: measurementSnapshot.pressureUnit,
+        precipitationUnit: measurementSnapshot.precipitationUnit,
+        lengthUnit: measurementSnapshot.lengthUnit,
+      }
+    : { ...DEFAULT_MEASUREMENT_PREFERENCES };
 
   const plannerGardens = gardens.map((garden) => ({
     id: garden.id,
@@ -80,14 +94,19 @@ export default async function GardenPage() {
           plannerGardens.length ? (
             <div className="mt-6">
               <div className="space-y-8">
-                <GardenPlanner gardens={plannerGardens} plants={plannerPlants} focusItems={plannerFocus} />
-                <CreateGardenForm />
+                <GardenPlanner
+                  gardens={plannerGardens}
+                  plants={plannerPlants}
+                  focusItems={plannerFocus}
+                  measurement={measurement}
+                />
+                <CreateGardenForm lengthUnit={measurement.lengthUnit} />
               </div>
             </div>
           ) : (
             <div className="mt-6 space-y-4">
               <p className="text-sm text-slate-600">No gardens yet. Create your first garden to start planning layouts.</p>
-              <CreateGardenForm />
+              <CreateGardenForm lengthUnit={measurement.lengthUnit} />
             </div>
           )
         ) : (
