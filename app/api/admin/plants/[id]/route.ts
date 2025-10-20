@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { auth } from "@/src/lib/auth/options";
-import { updatePlantForAdmin, type PlantAdminUpdateInput } from "@/src/server/plant-service";
+import {
+  updatePlantForAdmin,
+  type PlantAdminUpdateInput,
+  type ClimateWindowUpsertInput,
+} from "@/src/server/plant-service";
 
-const jsonValue: z.ZodType<unknown> = z.lazy(() =>
-  z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(jsonValue), z.record(jsonValue)]),
+const jsonValue: z.ZodType<Prisma.InputJsonValue> = z.lazy(() =>
+  z.union([z.string(), z.number(), z.boolean(), z.array(jsonValue), z.record(jsonValue)]),
 );
 
 const stringArray = z.array(z.string());
@@ -121,15 +126,17 @@ export async function PATCH(
 
   try {
     const rawPlant = parsed.data.plant
-      ? (removeUndefined(parsed.data.plant) as NonNullable<PlantAdminUpdateInput["plant"]>)
+      ? normalisePlantPayload(
+          removeUndefined(parsed.data.plant) as NonNullable<PlantAdminUpdateInput["plant"]>,
+        )
       : undefined;
     const plantPayload = rawPlant && Object.keys(rawPlant).length > 0 ? rawPlant : undefined;
-    const climateWindows = parsed.data.climateWindows?.map((window) => ({
-      id: window.id,
+    const climateWindows: ClimateWindowUpsertInput[] | undefined = parsed.data.climateWindows?.map((window) => ({
+      id: window.id ?? undefined,
       climateZoneId: window.climateZoneId,
-      sowIndoors: window.sowIndoors,
-      sowOutdoors: window.sowOutdoors,
-      transplant: window.transplant,
+      sowIndoors: window.sowIndoors ?? Prisma.JsonNull,
+      sowOutdoors: window.sowOutdoors ?? Prisma.JsonNull,
+      transplant: window.transplant ?? Prisma.JsonNull,
       notes: window.notes ?? null,
     }));
     const deleteClimateWindowIds = parsed.data.deleteClimateWindowIds?.length
@@ -150,4 +157,32 @@ export async function PATCH(
 
 function removeUndefined<T extends Record<string, unknown>>(object: T) {
   return Object.fromEntries(Object.entries(object).filter(([, value]) => value !== undefined)) as T;
+}
+
+const plantJsonFields = new Set<keyof NonNullable<PlantAdminUpdateInput["plant"]>>([
+  "wateringGeneralBenchmark",
+  "plantAnatomy",
+  "pruningCount",
+  "hardinessLocation",
+  "defaultImage",
+  "otherImages",
+  "wateringAvgVolume",
+  "wateringDepth",
+  "wateringBasedTemperature",
+  "wateringPhLevel",
+  "sunlightDuration",
+]);
+
+function normalisePlantPayload(
+  plant: NonNullable<PlantAdminUpdateInput["plant"]>,
+): NonNullable<PlantAdminUpdateInput["plant"]> {
+  return Object.fromEntries(
+    Object.entries(plant).map(([key, value]) => {
+      if (plantJsonFields.has(key as keyof NonNullable<PlantAdminUpdateInput["plant"]>)) {
+        if (value === undefined) return [key, value];
+        return [key, value == null ? Prisma.JsonNull : (value as Prisma.InputJsonValue)];
+      }
+      return [key, value];
+    }),
+  ) as NonNullable<PlantAdminUpdateInput["plant"]>;
 }

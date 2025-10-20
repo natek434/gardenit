@@ -3,6 +3,8 @@ import { createWriteStream } from "node:fs";
 import { access, copyFile, mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
+import { Readable } from "node:stream";
+import { ReadableStream as NodeReadableStream } from "node:stream/web";
 
 const PLANT_IMAGE_DIR = path.resolve(process.cwd(), "public", "plants");
 
@@ -36,7 +38,11 @@ async function downloadFile(url: string, destination: string) {
     throw new Error(`Failed to download image (${response.status}): ${url}`);
   }
   const stream = createWriteStream(destination);
-  await pipeline(response.body, stream);
+  const body = response.body;
+  if (!body) {
+    throw new Error(`Response for ${url} did not contain a body`);
+  }
+  await pipeline(Readable.fromWeb(body as unknown as NodeReadableStream), stream);
 }
 
 export type PersistImageOptions = {
