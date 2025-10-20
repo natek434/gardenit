@@ -426,8 +426,9 @@ async function main() {
     if (!plantAId || !plantBId) continue;
     await prisma.companion.create({
       data: {
-        plantAId,
-        plantBId,
+        plantId: plantAId,
+        targetPlantId: plantBId,
+        targetName: entry.plantB,
         type: entry.type,
         reason: entry.reason,
       },
