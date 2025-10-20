@@ -16,6 +16,7 @@
     "prisma:generate": "prisma generate",
     "prisma:seed": "prisma db seed",
     "perenual:import": "tsx scripts/perenual-import.ts",
+    "perenual:sync": "tsx scripts/perenual-sync.ts",
     "plants:import": "tsx scripts/manual-plant-import.ts",
     "climate:import": "tsx scripts/manual-climate-import.ts",
     "climate:backfill": "tsx scripts/backfill-climate-windows.ts"

@@ -21,6 +21,35 @@ type SerializableZone = {
   notes: string | null;
 };
 
+const FALLBACK_TIMEZONES = ["Pacific/Auckland", "Pacific/Chatham", "Australia/Sydney", "UTC"] as const;
+
+const detectLocalTimezone = () => {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return tz ?? "UTC";
+  } catch (error) {
+    console.warn("[Gardenit] Unable to detect local timezone", error);
+    return "UTC";
+  }
+};
+
+const getSupportedTimezones = (): string[] => {
+  try {
+    const values = (Intl as unknown as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf;
+    if (typeof values === "function") {
+      return values.call(Intl, "timeZone");
+    }
+  } catch (error) {
+    console.warn("[Gardenit] Unable to enumerate IANA timezones", error);
+  }
+  return [...FALLBACK_TIMEZONES];
+};
+
+const formatHourLabel = (hour: number) => {
+  const date = new Date(Date.UTC(2020, 0, 1, hour, 0, 0));
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+};
+
 export type SettingsFormProps = {
   user: {
     name: string | null;
@@ -30,11 +59,21 @@ export type SettingsFormProps = {
     climateZoneId: string | null;
   } | null;
   zones: SerializableZone[];
+  preferences: {
+    emailEnabled: boolean;
+    pushEnabled: boolean;
+    inAppEnabled: boolean;
+    emailDigestHour: number;
+    emailDigestTimezone: string | null;
+    dndEnabled: boolean;
+    dndStartHour: number | null;
+    dndEndHour: number | null;
+  };
 };
 
 type LocationSelection = { lat: number; lon: number; name: string } | null;
 
-export function SettingsForm({ user, zones }: SettingsFormProps) {
+export function SettingsForm({ user, zones, preferences }: SettingsFormProps) {
   const router = useRouter();
   const [name, setName] = useState(user?.name ?? "");
   const defaultCenter = useMemo(() => ({ lat: -36.8485, lng: 174.7633 }), []);
@@ -62,10 +101,24 @@ export function SettingsForm({ user, zones }: SettingsFormProps) {
   const [climateError, setClimateError] = useState<string | null>(null);
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [notificationMessage, setNotificationMessage] = useState<string | null>(null);
+  const [notificationError, setNotificationError] = useState<string | null>(null);
 
   const [isLocationPending, startLocationTransition] = useTransition();
   const [isClimatePending, startClimateTransition] = useTransition();
   const [isPasswordPending, startPasswordTransition] = useTransition();
+  const [isNotificationsPending, startNotificationsTransition] = useTransition();
+
+  const timezoneOptions = useMemo(() => getSupportedTimezones(), []);
+  const hours = useMemo(() => Array.from({ length: 24 }, (_, index) => index), []);
+  const [emailEnabled, setEmailEnabled] = useState(preferences.emailEnabled);
+  const [pushEnabled, setPushEnabled] = useState(preferences.pushEnabled);
+  const [inAppEnabled, setInAppEnabled] = useState(preferences.inAppEnabled);
+  const [emailDigestHour, setEmailDigestHour] = useState(preferences.emailDigestHour);
+  const [emailTimezone, setEmailTimezone] = useState(preferences.emailDigestTimezone ?? detectLocalTimezone());
+  const [dndEnabled, setDndEnabled] = useState(preferences.dndEnabled);
+  const [dndStartHour, setDndStartHour] = useState<number | "">(preferences.dndStartHour ?? "");
+  const [dndEndHour, setDndEndHour] = useState<number | "">(preferences.dndEndHour ?? "");
 
   const searchBoxRef = useRef<google.maps.places.SearchBox | null>(null);
   const geocoderRef = useRef<google.maps.Geocoder | null>(null);
@@ -99,6 +152,26 @@ export function SettingsForm({ user, zones }: SettingsFormProps) {
   useEffect(() => {
     setSelectedClimateId(user?.climateZoneId ?? "");
   }, [user?.climateZoneId]);
+
+  useEffect(() => {
+    setEmailEnabled(preferences.emailEnabled);
+    setPushEnabled(preferences.pushEnabled);
+    setInAppEnabled(preferences.inAppEnabled);
+    setEmailDigestHour(preferences.emailDigestHour);
+    setEmailTimezone(preferences.emailDigestTimezone ?? detectLocalTimezone());
+    setDndEnabled(preferences.dndEnabled);
+    setDndStartHour(preferences.dndStartHour ?? "");
+    setDndEndHour(preferences.dndEndHour ?? "");
+  }, [
+    preferences.emailEnabled,
+    preferences.pushEnabled,
+    preferences.inAppEnabled,
+    preferences.emailDigestHour,
+    preferences.emailDigestTimezone,
+    preferences.dndEnabled,
+    preferences.dndStartHour,
+    preferences.dndEndHour,
+  ]);
 
   const ensureGeocoder = () => {
     if (typeof window === "undefined" || !window.google?.maps) {
@@ -233,6 +306,58 @@ export function SettingsForm({ user, zones }: SettingsFormProps) {
       }
 
       setClimateMessage("Climate zone updated");
+      router.refresh();
+    });
+  };
+
+  const handleSaveNotifications = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setNotificationError(null);
+    setNotificationMessage(null);
+
+    if (dndEnabled) {
+      if (dndStartHour === "" || dndEndHour === "") {
+        setNotificationError("Choose start and end hours for do not disturb mode");
+        return;
+      }
+      if (dndStartHour === dndEndHour) {
+        setNotificationError("Start and end hours cannot match when do not disturb is enabled");
+        return;
+      }
+    }
+
+    const normalizedTimezone = emailTimezone && emailTimezone.length ? emailTimezone : null;
+    const payload = {
+      emailEnabled,
+      pushEnabled,
+      inAppEnabled,
+      emailDigestHour,
+      emailDigestTimezone: normalizedTimezone,
+      dndEnabled,
+      dndStartHour:
+        dndEnabled && dndStartHour !== "" ? Number(dndStartHour) : null,
+      dndEndHour:
+        dndEnabled && dndEndHour !== "" ? Number(dndEndHour) : null,
+    };
+
+    startNotificationsTransition(async () => {
+      const response = await fetch("/api/notifications/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const data = await response
+          .json()
+          .catch(() => ({ error: "Unable to update notification preferences" }));
+        setNotificationError(
+          typeof data.error === "string" ? data.error : "Unable to update notification preferences",
+        );
+        return;
+      }
+
+      setNotificationMessage("Notification preferences saved");
       router.refresh();
     });
   };
@@ -435,8 +560,151 @@ export function SettingsForm({ user, zones }: SettingsFormProps) {
           </div>
           {climateError ? <p className="text-sm text-red-600">{climateError}</p> : null}
           {climateMessage ? <p className="text-sm text-emerald-600">{climateMessage}</p> : null}
-          <Button type="submit" disabled={isClimatePending}>
-            {isClimatePending ? "Saving…" : "Save climate zone"}
+      <Button type="submit" disabled={isClimatePending}>
+        {isClimatePending ? "Saving…" : "Save climate zone"}
+      </Button>
+    </form>
+  </section>
+
+      <section className="space-y-5 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+        <header className="space-y-1">
+          <h2 className="text-lg font-semibold text-slate-800">Notification preferences</h2>
+          <p className="text-sm text-slate-600">Tune email delivery, in-app alerts, and quiet hours.</p>
+        </header>
+        <form onSubmit={handleSaveNotifications} className="space-y-5">
+          <div className="space-y-3">
+            <label className="flex items-center gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={emailEnabled}
+                onChange={(event) => setEmailEnabled(event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+              />
+              <span className="font-medium text-slate-700">Send email notifications</span>
+            </label>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-2 text-sm">
+                <span className="font-medium text-slate-700">Preferred digest hour</span>
+                <select
+                  value={String(emailDigestHour)}
+                  onChange={(event) => setEmailDigestHour(Number(event.target.value))}
+                  disabled={!emailEnabled}
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:bg-slate-100"
+                >
+                  {hours.map((hour) => (
+                    <option key={hour} value={String(hour)}>
+                      {formatHourLabel(hour)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="space-y-2 text-sm">
+                <span className="font-medium text-slate-700">Timezone</span>
+                <select
+                  value={emailTimezone}
+                  onChange={(event) => setEmailTimezone(event.target.value)}
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+                >
+                  {timezoneOptions.map((timezone) => (
+                    <option key={timezone} value={timezone}>
+                      {timezone}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <label className="flex items-center gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={pushEnabled}
+                onChange={(event) => setPushEnabled(event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+              />
+              <span className="font-medium text-slate-700">
+                Allow push alerts (emails sent when push is unavailable)
+              </span>
+            </label>
+            <label className="flex items-center gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={inAppEnabled}
+                onChange={(event) => setInAppEnabled(event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+              />
+              <span className="font-medium text-slate-700">Show in-app notifications</span>
+            </label>
+          </div>
+          <fieldset className="space-y-3 rounded border border-slate-200 p-4">
+            <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Do not disturb</legend>
+            <label className="flex items-center gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={dndEnabled}
+                onChange={(event) => {
+                  const next = event.target.checked;
+                  setDndEnabled(next);
+                  if (next) {
+                    setDndStartHour((prev) => (prev === "" ? 22 : prev));
+                    setDndEndHour((prev) => (prev === "" ? 7 : prev));
+                  }
+                }}
+                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+              />
+              <span className="font-medium text-slate-700">Mute email and push between these hours</span>
+            </label>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-2 text-sm">
+                <span className="font-medium text-slate-700">Start hour</span>
+                <select
+                  value={dndStartHour === "" ? "" : String(dndStartHour)}
+                  onChange={(event) =>
+                    setDndStartHour(event.target.value === "" ? "" : Number(event.target.value))
+                  }
+                  disabled={!dndEnabled}
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:bg-slate-100"
+                >
+                  <option value="">None</option>
+                  {hours.map((hour) => (
+                    <option key={`start-${hour}`} value={String(hour)}>
+                      {formatHourLabel(hour)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="space-y-2 text-sm">
+                <span className="font-medium text-slate-700">End hour</span>
+                <select
+                  value={dndEndHour === "" ? "" : String(dndEndHour)}
+                  onChange={(event) =>
+                    setDndEndHour(event.target.value === "" ? "" : Number(event.target.value))
+                  }
+                  disabled={!dndEnabled}
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:bg-slate-100"
+                >
+                  <option value="">None</option>
+                  {hours.map((hour) => (
+                    <option key={`end-${hour}`} value={String(hour)}>
+                      {formatHourLabel(hour)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <p className="text-xs text-slate-500">
+              Quiet hours apply to email and push notifications using your selected timezone. Alerts resume immediately after the
+              end hour.
+            </p>
+          </fieldset>
+          {notificationError ? (
+            <p className="text-sm text-red-600" role="alert">
+              {notificationError}
+            </p>
+          ) : null}
+          {notificationMessage ? <p className="text-sm text-emerald-600">{notificationMessage}</p> : null}
+          <Button type="submit" disabled={isNotificationsPending}>
+            {isNotificationsPending ? "Saving…" : "Save notification settings"}
           </Button>
         </form>
       </section>

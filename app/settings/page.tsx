@@ -3,6 +3,7 @@ import { auth } from "@/src/lib/auth/options";
 import { getClimateZones } from "@/src/server/climate-service";
 import { getUserProfile } from "@/src/server/user-service";
 import { SettingsForm } from "@/src/components/settings/settings-form";
+import { getNotificationPreferencesByUser } from "@/src/server/notification-preference-service";
 
 export default async function SettingsPage() {
   const session = await auth();
@@ -22,6 +23,7 @@ export default async function SettingsPage() {
   }
 
   const user = await getUserProfile(session.user.id);
+  const preferences = await getNotificationPreferencesByUser(session.user.id);
 
   const zoneOptions = zones.map((zone) => ({
     id: zone.id,
@@ -35,11 +37,11 @@ export default async function SettingsPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold">Location & reminders</h1>
-        <p className="text-sm text-slate-600">Manage your climate zone, frost preferences, and email reminders.</p>
+        <h1 className="text-2xl font-semibold">Account & location</h1>
+        <p className="text-sm text-slate-600">Update your profile, climate zone, and notification preferences.</p>
       </header>
 
-      <SettingsForm user={user} zones={zoneOptions} />
+      <SettingsForm user={user} zones={zoneOptions} preferences={preferences} />
     </div>
   );
 }
