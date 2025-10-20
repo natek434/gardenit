@@ -11,6 +11,24 @@ import {
 } from "@react-google-maps/api";
 import type { Libraries } from "@react-google-maps/api";
 import { Button } from "../ui/button";
+import {
+  LENGTH_UNITS,
+  PRECIPITATION_UNITS,
+  PRESSURE_UNITS,
+  TEMPERATURE_UNITS,
+  WIND_SPEED_UNITS,
+  describeLengthUnit,
+  describePrecipitationUnit,
+  describePressureUnit,
+  describeTemperatureUnit,
+  describeWindSpeedUnit,
+  type LengthUnit,
+  type PrecipitationUnit,
+  type PressureUnit,
+  type TemperatureUnit,
+  type WindSpeedUnit,
+} from "@/src/lib/units";
+import type { MeasurementPreferenceSnapshot } from "@/src/server/measurement-preference-service";
 
 type SerializableZone = {
   id: string;
@@ -69,11 +87,12 @@ export type SettingsFormProps = {
     dndStartHour: number | null;
     dndEndHour: number | null;
   };
+  measurementPreferences: MeasurementPreferenceSnapshot;
 };
 
 type LocationSelection = { lat: number; lon: number; name: string } | null;
 
-export function SettingsForm({ user, zones, preferences }: SettingsFormProps) {
+export function SettingsForm({ user, zones, preferences, measurementPreferences }: SettingsFormProps) {
   const router = useRouter();
   const [name, setName] = useState(user?.name ?? "");
   const defaultCenter = useMemo(() => ({ lat: -36.8485, lng: 174.7633 }), []);
@@ -103,11 +122,24 @@ export function SettingsForm({ user, zones, preferences }: SettingsFormProps) {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [notificationMessage, setNotificationMessage] = useState<string | null>(null);
   const [notificationError, setNotificationError] = useState<string | null>(null);
+  const [unitsMessage, setUnitsMessage] = useState<string | null>(null);
+  const [unitsError, setUnitsError] = useState<string | null>(null);
+
+  const [temperatureUnit, setTemperatureUnit] = useState<TemperatureUnit>(
+    measurementPreferences.temperatureUnit,
+  );
+  const [windSpeedUnit, setWindSpeedUnit] = useState<WindSpeedUnit>(measurementPreferences.windSpeedUnit);
+  const [pressureUnit, setPressureUnit] = useState<PressureUnit>(measurementPreferences.pressureUnit);
+  const [precipitationUnit, setPrecipitationUnit] = useState<PrecipitationUnit>(
+    measurementPreferences.precipitationUnit,
+  );
+  const [lengthUnit, setLengthUnit] = useState<LengthUnit>(measurementPreferences.lengthUnit);
 
   const [isLocationPending, startLocationTransition] = useTransition();
   const [isClimatePending, startClimateTransition] = useTransition();
   const [isPasswordPending, startPasswordTransition] = useTransition();
   const [isNotificationsPending, startNotificationsTransition] = useTransition();
+  const [isUnitsPending, startUnitsTransition] = useTransition();
 
   const timezoneOptions = useMemo(() => getSupportedTimezones(), []);
   const hours = useMemo(() => Array.from({ length: 24 }, (_, index) => index), []);
@@ -171,6 +203,20 @@ export function SettingsForm({ user, zones, preferences }: SettingsFormProps) {
     preferences.dndEnabled,
     preferences.dndStartHour,
     preferences.dndEndHour,
+  ]);
+
+  useEffect(() => {
+    setTemperatureUnit(measurementPreferences.temperatureUnit);
+    setWindSpeedUnit(measurementPreferences.windSpeedUnit);
+    setPressureUnit(measurementPreferences.pressureUnit);
+    setPrecipitationUnit(measurementPreferences.precipitationUnit);
+    setLengthUnit(measurementPreferences.lengthUnit);
+  }, [
+    measurementPreferences.temperatureUnit,
+    measurementPreferences.windSpeedUnit,
+    measurementPreferences.pressureUnit,
+    measurementPreferences.precipitationUnit,
+    measurementPreferences.lengthUnit,
   ]);
 
   const ensureGeocoder = () => {
@@ -358,6 +404,39 @@ export function SettingsForm({ user, zones, preferences }: SettingsFormProps) {
       }
 
       setNotificationMessage("Notification preferences saved");
+      router.refresh();
+    });
+  };
+
+  const handleSaveUnits = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setUnitsError(null);
+    setUnitsMessage(null);
+
+    startUnitsTransition(async () => {
+      const response = await fetch("/api/settings/units", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          temperatureUnit,
+          windSpeedUnit,
+          pressureUnit,
+          precipitationUnit,
+          lengthUnit,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response
+          .json()
+          .catch(() => ({ error: "Unable to update measurement preferences" }));
+        setUnitsError(
+          typeof data.error === "string" ? data.error : "Unable to update measurement preferences",
+        );
+        return;
+      }
+
+      setUnitsMessage("Measurement preferences saved");
       router.refresh();
     });
   };
@@ -565,6 +644,101 @@ export function SettingsForm({ user, zones, preferences }: SettingsFormProps) {
       </Button>
     </form>
   </section>
+
+      <section className="space-y-5 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+        <header className="space-y-1">
+          <h2 className="text-lg font-semibold text-slate-800">Measurement units</h2>
+          <p className="text-sm text-slate-600">
+            Choose how temperatures, wind, pressure, precipitation, and bed dimensions appear across Gardenit.
+          </p>
+        </header>
+        <form onSubmit={handleSaveUnits} className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <label className="space-y-2 text-sm">
+              <span className="font-medium text-slate-700">Temperature</span>
+              <select
+                value={temperatureUnit}
+                onChange={(event) => setTemperatureUnit(event.target.value as TemperatureUnit)}
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                {TEMPERATURE_UNITS.map((unit) => (
+                  <option key={unit} value={unit}>
+                    {describeTemperatureUnit(unit)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-2 text-sm">
+              <span className="font-medium text-slate-700">Wind speed</span>
+              <select
+                value={windSpeedUnit}
+                onChange={(event) => setWindSpeedUnit(event.target.value as WindSpeedUnit)}
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                {WIND_SPEED_UNITS.map((unit) => (
+                  <option key={unit} value={unit}>
+                    {describeWindSpeedUnit(unit)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-2 text-sm">
+              <span className="font-medium text-slate-700">Pressure</span>
+              <select
+                value={pressureUnit}
+                onChange={(event) => setPressureUnit(event.target.value as PressureUnit)}
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                {PRESSURE_UNITS.map((unit) => (
+                  <option key={unit} value={unit}>
+                    {describePressureUnit(unit)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-2 text-sm">
+              <span className="font-medium text-slate-700">Precipitation</span>
+              <select
+                value={precipitationUnit}
+                onChange={(event) => setPrecipitationUnit(event.target.value as PrecipitationUnit)}
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                {PRECIPITATION_UNITS.map((unit) => (
+                  <option key={unit} value={unit}>
+                    {describePrecipitationUnit(unit)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-2 text-sm">
+              <span className="font-medium text-slate-700">Garden dimensions</span>
+              <select
+                value={lengthUnit}
+                onChange={(event) => setLengthUnit(event.target.value as LengthUnit)}
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                {LENGTH_UNITS.map((unit) => (
+                  <option key={unit} value={unit}>
+                    {describeLengthUnit(unit)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <p className="text-xs text-slate-500">
+            These preferences apply to the dashboard forecast, garden planner, and any future climate-powered features.
+          </p>
+          {unitsError ? (
+            <p className="text-sm text-red-600" role="alert">
+              {unitsError}
+            </p>
+          ) : null}
+          {unitsMessage ? <p className="text-sm text-emerald-600">{unitsMessage}</p> : null}
+          <Button type="submit" disabled={isUnitsPending}>
+            {isUnitsPending ? "Saving…" : "Save measurement settings"}
+          </Button>
+        </form>
+      </section>
 
       <section className="space-y-5 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
         <header className="space-y-1">

@@ -5,6 +5,10 @@ export type ForecastDay = {
   temperatureMaxC: number;
   temperatureMinC: number;
   rainChance: number;
+  windSpeedMaxKph: number;
+  windGustMaxKph: number;
+  windDirectionDominantDeg: number;
+  precipitationMm: number;
 };
 
 export type CurrentConditions = {
@@ -30,6 +34,10 @@ type OpenMeteoDailyResponse = {
     temperature_2m_max?: number[];
     temperature_2m_min?: number[];
     precipitation_probability_max?: number[];
+    wind_speed_10m_max?: number[];
+    wind_gusts_10m_max?: number[];
+    wind_direction_10m_dominant?: number[];
+    precipitation_sum?: number[];
   };
 };
 
@@ -57,7 +65,18 @@ class OpenMeteoWeatherProvider implements WeatherProvider {
     const url = new URL(OPEN_METEO_BASE_URL);
     url.searchParams.set("latitude", lat.toString());
     url.searchParams.set("longitude", lon.toString());
-    url.searchParams.set("daily", "temperature_2m_max,temperature_2m_min,precipitation_probability_max");
+    url.searchParams.set(
+      "daily",
+      [
+        "temperature_2m_max",
+        "temperature_2m_min",
+        "precipitation_probability_max",
+        "wind_speed_10m_max",
+        "wind_gusts_10m_max",
+        "wind_direction_10m_dominant",
+        "precipitation_sum",
+      ].join(","),
+    );
     url.searchParams.set("forecast_days", "7");
     url.searchParams.set("timezone", "auto");
 
@@ -69,14 +88,22 @@ class OpenMeteoWeatherProvider implements WeatherProvider {
     const times = data.daily?.time ?? [];
     const highs = data.daily?.temperature_2m_max ?? [];
     const rain = data.daily?.precipitation_probability_max ?? [];
-
     const lows = data.daily?.temperature_2m_min ?? [];
+    const wind = data.daily?.wind_speed_10m_max ?? [];
+    const gusts = data.daily?.wind_gusts_10m_max ?? [];
+    const dominant = data.daily?.wind_direction_10m_dominant ?? [];
+    const precipitation = data.daily?.precipitation_sum ?? [];
 
     return times.map((time, index) => ({
       date: time,
       temperatureMaxC: typeof highs[index] === "number" ? highs[index]! : Number.NaN,
       temperatureMinC: typeof lows[index] === "number" ? lows[index]! : Number.NaN,
       rainChance: typeof rain[index] === "number" ? Math.round(rain[index]!) : 0,
+      windSpeedMaxKph: typeof wind[index] === "number" ? wind[index]! : Number.NaN,
+      windGustMaxKph: typeof gusts[index] === "number" ? gusts[index]! : Number.NaN,
+      windDirectionDominantDeg:
+        typeof dominant[index] === "number" ? dominant[index]! : Number.NaN,
+      precipitationMm: typeof precipitation[index] === "number" ? precipitation[index]! : Number.NaN,
     }));
   }
 

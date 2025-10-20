@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { GardenPlanner } from "@/src/components/garden/garden-planner";
+import { DEFAULT_MEASUREMENT_PREFERENCES } from "@/src/lib/units";
 
 const demoGardens = [
   {
@@ -105,7 +106,12 @@ export default function GardenSandboxPage() {
   return (
     <div className="space-y-6 p-6">
       <h1 className="text-2xl font-semibold">Garden planner sandbox</h1>
-      <GardenPlanner gardens={demoGardens} plants={demoPlants} focusItems={demoFocus} />
+      <GardenPlanner
+        gardens={demoGardens}
+        plants={demoPlants}
+        focusItems={demoFocus}
+        measurement={DEFAULT_MEASUREMENT_PREFERENCES}
+      />
     </div>
   );
 }
