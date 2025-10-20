@@ -1,4 +1,4 @@
-import { PrismaClient, Role } from "@prisma/client";
+import { Prisma, PrismaClient, Role } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -271,13 +271,13 @@ async function main() {
   ];
 
   const createdPlants = await Promise.all(
-    plants.map((plant) =>
-      prisma.plant.upsert({
-        where: { commonName: plant.commonName },
-        update: plant,
-        create: plant,
-      }),
-    ),
+    plants.map(async (plant) => {
+      const existing = await prisma.plant.findFirst({ where: { commonName: plant.commonName } });
+      if (existing) {
+        return prisma.plant.update({ where: { id: existing.id }, data: plant });
+      }
+      return prisma.plant.create({ data: plant });
+    }),
   );
 
   const windows = [
@@ -393,16 +393,16 @@ async function main() {
     await prisma.climatePlantWindow.upsert({
       where: { plantId_climateZoneId: { plantId: plant.id, climateZoneId: window.zone } },
       update: {
-        sowIndoors: window.sowIndoors ?? null,
-        sowOutdoors: window.sowOutdoors ?? null,
-        transplant: window.transplant ?? null,
+        sowIndoors: window.sowIndoors ?? Prisma.JsonNull,
+        sowOutdoors: window.sowOutdoors ?? Prisma.JsonNull,
+        transplant: window.transplant ?? Prisma.JsonNull,
       },
       create: {
         plantId: plant.id,
         climateZoneId: window.zone,
-        sowIndoors: window.sowIndoors ?? null,
-        sowOutdoors: window.sowOutdoors ?? null,
-        transplant: window.transplant ?? null,
+        sowIndoors: window.sowIndoors ?? Prisma.JsonNull,
+        sowOutdoors: window.sowOutdoors ?? Prisma.JsonNull,
+        transplant: window.transplant ?? Prisma.JsonNull,
       },
     });
   }

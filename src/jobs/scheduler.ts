@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import { NotificationRuleType } from "@prisma/client";
+import { NotificationRuleType, Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { sendEmail } from "../lib/email";
 
@@ -11,7 +11,7 @@ type BuiltInRule = {
   name: string;
   type: NotificationRuleType;
   schedule?: string;
-  params: Record<string, unknown>;
+  params: Prisma.InputJsonValue;
   throttleSecs?: number;
 };
 
@@ -283,7 +283,7 @@ type UserRuleContext = {
 
 export async function evaluateNotificationRules(reference = new Date()) {
   const users = await prisma.user.findMany({
-    where: { email: { not: null } },
+    where: { NOT: { email: "" } },
     select: {
       id: true,
       email: true,
@@ -371,7 +371,7 @@ async function evaluateRuleForUser(
     name: string;
     type: string;
     schedule: string | null;
-    params: Record<string, unknown>;
+    params: Prisma.JsonValue;
     throttleSecs: number;
   },
   context: UserRuleContext,
@@ -400,7 +400,7 @@ async function evaluateRuleForUser(
 async function evaluateTimeRule(
   reference: Date,
   user: { id: string; email: string | null; name: string | null },
-  rule: { id: string; schedule: string | null; params: Record<string, unknown>; throttleSecs: number },
+  rule: { id: string; schedule: string | null; params: Prisma.JsonValue; throttleSecs: number },
   context: UserRuleContext,
 ) {
   if (!rule.schedule) return;
@@ -410,8 +410,9 @@ async function evaluateTimeRule(
     return;
   }
 
-  const actions = Array.isArray((rule.params as { actions?: unknown }).actions)
-    ? ((rule.params as { actions?: unknown }).actions as Array<Record<string, unknown>>)
+  const params = asJsonObject(rule.params) ?? {};
+  const actions = Array.isArray(params.actions)
+    ? (params.actions as Array<Record<string, unknown>>)
     : [];
 
   for (const action of actions) {
@@ -424,7 +425,7 @@ async function evaluateTimeRule(
         body: String(action.body ?? ""),
         severity: (action.severity as "info" | "warning" | "critical") ?? "info",
         channel: (action.channel as "email" | "inapp" | "push") ?? "inapp",
-        meta: { action },
+        meta: toInputJson({ action }),
       });
     }
   }
@@ -467,7 +468,7 @@ async function dispatchDigest(
       severity: "info",
       channel: "email",
       dueAt: reference,
-      meta: { focus: context.focusItems.map((item) => item.targetId) },
+      meta: toInputJson({ focus: context.focusItems.map((item) => item.targetId) }),
     },
   });
 
@@ -483,11 +484,11 @@ async function dispatchDigest(
 async function evaluateWeatherRule(
   reference: Date,
   user: { id: string; email: string | null; name: string | null },
-  rule: { id: string; params: Record<string, unknown>; throttleSecs: number },
+  rule: { id: string; params: Prisma.JsonValue; throttleSecs: number },
   context: UserRuleContext,
 ) {
   if (!context.weather) return;
-  const params = rule.params as Record<string, unknown>;
+  const params = asJsonObject(rule.params) ?? {};
   if (typeof params.precipProbNext24hGte === "number") {
     if (context.weather.precipProbNext24h >= params.precipProbNext24hGte) {
       await handleWeatherActions(reference, user, rule, context, params.actions);
@@ -555,7 +556,7 @@ async function handleWeatherActions(
         body: String(typed.body ?? ""),
         severity: (typed.severity as "info" | "warning" | "critical") ?? "info",
         channel: (typed.channel as "inapp" | "email" | "push") ?? "inapp",
-        meta: { focusOnly: options.focusOnly ?? false },
+        meta: toInputJson({ focusOnly: options.focusOnly ?? false }),
       });
     }
   }
@@ -564,11 +565,11 @@ async function handleWeatherActions(
 async function evaluateSoilRule(
   reference: Date,
   user: { id: string; email: string | null; name: string | null },
-  rule: { id: string; params: Record<string, unknown>; throttleSecs: number },
+  rule: { id: string; params: Prisma.JsonValue; throttleSecs: number },
   context: UserRuleContext,
 ) {
   if (!context.weather?.soilTemp10cm) return;
-  const params = rule.params as Record<string, unknown>;
+  const params = asJsonObject(rule.params) ?? {};
   if (typeof params.soilTemp10cmGte === "number" && context.weather.soilTemp10cm >= params.soilTemp10cmGte) {
     const species = Array.isArray(params.species)
       ? (params.species as string[]).map((item) => item.toLowerCase())
@@ -584,7 +585,7 @@ async function evaluateSoilRule(
         .join(", ")}.`,
       severity: "info",
       channel: "inapp",
-      meta: { plantings: relevantPlantings.map((planting) => planting.id) },
+      meta: toInputJson({ plantings: relevantPlantings.map((planting) => planting.id) }),
     });
   }
 }
@@ -592,10 +593,10 @@ async function evaluateSoilRule(
 async function evaluatePhenologyRule(
   reference: Date,
   user: { id: string; email: string | null; name: string | null },
-  rule: { id: string; params: Record<string, unknown>; throttleSecs: number },
+  rule: { id: string; params: Prisma.JsonValue; throttleSecs: number },
   context: UserRuleContext,
 ) {
-  const params = rule.params as Record<string, unknown>;
+  const params = asJsonObject(rule.params) ?? {};
   const threshold = typeof params.maturityGDDPctGte === "number" ? params.maturityGDDPctGte : 0.8;
   const nearing = context.plantings.filter((planting) => {
     if (!planting.plant.daysToMaturity) return false;
@@ -609,17 +610,17 @@ async function evaluatePhenologyRule(
     body: `Check ${nearing.map((planting) => planting.plant.commonName).join(", ")} for harvest readiness.`,
     severity: "info",
     channel: "email",
-    meta: { plantings: nearing.map((planting) => planting.id) },
+    meta: toInputJson({ plantings: nearing.map((planting) => planting.id) }),
   });
 }
 
 async function evaluateGardenRule(
   reference: Date,
   user: { id: string; email: string | null; name: string | null },
-  rule: { id: string; params: Record<string, unknown>; throttleSecs: number },
+  rule: { id: string; params: Prisma.JsonValue; throttleSecs: number },
   context: UserRuleContext,
 ) {
-  const params = rule.params as Record<string, unknown>;
+  const params = asJsonObject(rule.params) ?? {};
   const overdueHours = typeof params.overdueTaskHoursGte === "number" ? params.overdueTaskHoursGte : 48;
   const focusOnly = Boolean(params.focusOnly);
   const overdue = context.reminders.filter((reminder) => {
@@ -635,7 +636,7 @@ async function evaluateGardenRule(
     body: overdue.map((reminder) => `• ${reminder.title} (${reminder.dueAt.toLocaleString()})`).join("\n"),
     severity: "warning",
     channel: "inapp",
-    meta: { reminders: overdue.map((reminder) => reminder.id) },
+    meta: toInputJson({ reminders: overdue.map((reminder) => reminder.id) }),
   });
 }
 
@@ -648,7 +649,7 @@ async function dispatchNotification(
     body: string;
     severity: "info" | "warning" | "critical";
     channel: "inapp" | "email" | "push";
-    meta?: Record<string, unknown>;
+    meta?: Prisma.InputJsonValue;
   },
 ) {
   const since = new Date(reference.getTime() - rule.throttleSecs * 1000);
@@ -665,7 +666,7 @@ async function dispatchNotification(
       severity: payload.severity,
       channel: payload.channel,
       dueAt: reference,
-      meta: payload.meta ?? null,
+      meta: payload.meta ?? Prisma.JsonNull,
     },
   });
   if (payload.channel === "email" && user.email) {
@@ -701,6 +702,17 @@ export function buildFocusDigest(context: UserRuleContext) {
     }
   }
   return lines;
+}
+
+function asJsonObject(value: Prisma.JsonValue | null | undefined): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function toInputJson(value: unknown): Prisma.InputJsonValue {
+  return value as Prisma.InputJsonValue;
 }
 
 type ZonedDate = { year: number; month: number; day: number; hour: number; minute: number; weekday: string };
