@@ -67,12 +67,12 @@ type PlannerPlant = {
 
 type SpacingGuide = {
   id: string;
-  x1Percent: number;
-  y1Percent: number;
-  x2Percent: number;
-  y2Percent: number;
-  midpointXPercent: number;
-  midpointYPercent: number;
+  orientation: "horizontal" | "vertical";
+  startPercent: number;
+  endPercent: number;
+  constantPercent: number;
+  labelXPercent: number;
+  labelYPercent: number;
   distanceCm: number;
 };
 
@@ -244,7 +244,7 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus, measu
   const spacingGuides = useMemo<SpacingGuide[]>(() => {
     if (!showSpacingGuides || !activeBed) return [];
     if (!bedWidthCm || !bedLengthCm) return [];
-    if (displayedPlantings.length < 2) return [];
+    if (!displayedPlantings.length) return [];
 
     const safeWidth = Math.max(0.0001, bedWidthCm);
     const safeLength = Math.max(0.0001, bedLengthCm);
@@ -255,46 +255,159 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus, measu
     });
 
     const guides: SpacingGuide[] = [];
-    const maxGuides = 600;
+    const maxGuides = 800;
+
+    const toPercent = (value: number, total: number) => (value / total) * 100;
+    const clampPercent = (value: number) => Math.min(98, Math.max(2, value));
+
+    const pushHorizontal = (
+      id: string,
+      startX: number,
+      endX: number,
+      constantY: number,
+      distance: number,
+      labelYOffset = -3,
+    ) => {
+      if (guides.length >= maxGuides) return;
+      if (distance <= 0.5) return;
+      const startPercent = toPercent(Math.min(startX, endX), safeWidth);
+      const endPercent = toPercent(Math.max(startX, endX), safeWidth);
+      if (Math.abs(endPercent - startPercent) < 0.5) return;
+      const constantPercent = clampPercent(toPercent(constantY, safeLength));
+      const labelXPercent = (startPercent + endPercent) / 2;
+      const labelYPercent = clampPercent(constantPercent + labelYOffset);
+      guides.push({
+        id,
+        orientation: "horizontal",
+        startPercent,
+        endPercent,
+        constantPercent,
+        labelXPercent,
+        labelYPercent,
+        distanceCm: distance,
+      });
+    };
+
+    const pushVertical = (
+      id: string,
+      startY: number,
+      endY: number,
+      constantX: number,
+      distance: number,
+      labelXOffset = 3,
+    ) => {
+      if (guides.length >= maxGuides) return;
+      if (distance <= 0.5) return;
+      const startPercent = toPercent(Math.min(startY, endY), safeLength);
+      const endPercent = toPercent(Math.max(startY, endY), safeLength);
+      if (Math.abs(endPercent - startPercent) < 0.5) return;
+      const constantPercent = clampPercent(toPercent(constantX, safeWidth));
+      const labelXPercent = clampPercent(constantPercent + labelXOffset);
+      const labelYPercent = (startPercent + endPercent) / 2;
+      guides.push({
+        id,
+        orientation: "vertical",
+        startPercent,
+        endPercent,
+        constantPercent,
+        labelXPercent,
+        labelYPercent,
+        distanceCm: distance,
+      });
+    };
 
     for (let index = 0; index < placements.length; index += 1) {
+      const current = placements[index];
+
+      // Distances to bed edges (horizontal & vertical)
+      const distanceLeft = current.xCm;
+      const distanceRight = safeWidth - current.xCm;
+      if (distanceLeft <= distanceRight) {
+        const yOffset = Math.min(5, safeLength * 0.02);
+        pushHorizontal(
+          `${current.id}-edge-left`,
+          0,
+          current.xCm,
+          Math.max(0, current.yCm - yOffset),
+          distanceLeft,
+        );
+      } else {
+        const yOffset = Math.min(5, safeLength * 0.02);
+        pushHorizontal(
+          `${current.id}-edge-right`,
+          current.xCm,
+          safeWidth,
+          Math.min(safeLength, current.yCm + yOffset),
+          distanceRight,
+          3,
+        );
+      }
+
+      const distanceTop = current.yCm;
+      const distanceBottom = safeLength - current.yCm;
+      if (distanceTop <= distanceBottom) {
+        const xOffset = Math.min(5, safeWidth * 0.02);
+        pushVertical(
+          `${current.id}-edge-top`,
+          0,
+          current.yCm,
+          Math.max(0, current.xCm - xOffset),
+          distanceTop,
+          -3,
+        );
+      } else {
+        const xOffset = Math.min(5, safeWidth * 0.02);
+        pushVertical(
+          `${current.id}-edge-bottom`,
+          current.yCm,
+          safeLength,
+          Math.min(safeWidth, current.xCm + xOffset),
+          distanceBottom,
+        );
+      }
+
       for (let inner = index + 1; inner < placements.length; inner += 1) {
         if (guides.length >= maxGuides) {
           return guides;
         }
-        const current = placements[index];
         const comparison = placements[inner];
-        const deltaX = comparison.xCm - current.xCm;
-        const deltaY = comparison.yCm - current.yCm;
-        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-        if (distance < 0.01) continue;
+        const deltaX = Math.abs(comparison.xCm - current.xCm);
+        const deltaY = Math.abs(comparison.yCm - current.yCm);
 
-        const x1Percent = (current.xCm / safeWidth) * 100;
-        const y1Percent = (current.yCm / safeLength) * 100;
-        const x2Percent = (comparison.xCm / safeWidth) * 100;
-        const y2Percent = (comparison.yCm / safeLength) * 100;
+        const horizontalY = (current.yCm + comparison.yCm) / 2;
+        pushHorizontal(
+          `${current.id}:${comparison.id}:horizontal`,
+          current.xCm,
+          comparison.xCm,
+          horizontalY,
+          deltaX,
+        );
 
-        guides.push({
-          id: `${current.id}:${comparison.id}`,
-          x1Percent,
-          y1Percent,
-          x2Percent,
-          y2Percent,
-          midpointXPercent: (x1Percent + x2Percent) / 2,
-          midpointYPercent: (y1Percent + y2Percent) / 2,
-          distanceCm: distance,
-        });
+        const verticalX = (current.xCm + comparison.xCm) / 2;
+        pushVertical(
+          `${current.id}:${comparison.id}:vertical`,
+          current.yCm,
+          comparison.yCm,
+          verticalX,
+          deltaY,
+        );
       }
     }
 
     return guides;
-  }, [showSpacingGuides, activeBed, bedWidthCm, bedLengthCm, displayedPlantings]);
+  }, [
+    showSpacingGuides,
+    activeBed,
+    bedWidthCm,
+    bedLengthCm,
+    displayedPlantings,
+  ]);
 
   useEffect(() => {
     if (!showSpacingGuides) return;
-    if (displayedPlantings.length >= 2) return;
+    if (spacingGuides.length > 0) return;
     setShowSpacingGuides(false);
-  }, [displayedPlantings.length, showSpacingGuides]);
+  }, [showSpacingGuides, spacingGuides.length]);
 
   const isActiveBedFocused = activeBed ? focusBedIds.has(activeBed.id) : false;
   const bedContainerClassName = [
@@ -1002,15 +1115,13 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus, measu
             ) : null}
             <button
               type="button"
-              onClick={() =>
-                displayedPlantings.length >= 2 && setShowSpacingGuides((value) => !value)
-              }
-              disabled={displayedPlantings.length < 2}
+              onClick={() => displayedPlantings.length && setShowSpacingGuides((value) => !value)}
+              disabled={!displayedPlantings.length}
               className={`rounded px-3 py-1 text-xs font-semibold uppercase tracking-wide transition ${
                 showSpacingGuides
                   ? "bg-slate-900 text-white"
                   : "border border-slate-700 text-slate-700 hover:border-slate-900 hover:text-slate-900"
-              } ${displayedPlantings.length < 2 ? "cursor-not-allowed opacity-40" : ""}`}
+              } ${!displayedPlantings.length ? "cursor-not-allowed opacity-40" : ""}`}
             >
               {showSpacingGuides ? "Hide spacing guides" : "Show spacing guides"}
             </button>
@@ -1078,7 +1189,7 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus, measu
           </form>
         ) : null}
         {activeBed ? (
-          <div>
+          <>
             <div className={bedContainerClassName} style={{ paddingBottom: `${(bedLengthCm / bedWidthCm) * 100}%` }}>
               <div className="absolute inset-0 overflow-hidden">
                 <div aria-hidden className="pointer-events-none absolute inset-0" style={bedGrid?.style} />
@@ -1243,13 +1354,17 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus, measu
                       })()
                     : null}
 
-                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs font-medium text-slate-400">
-                    {isPending ? "Saving changes…" : "Drag plants here"}
-                  </div>
                 </div>
               </div>
             </div>
-          </div>
+            <div className="mt-2 text-center text-xs font-medium text-slate-500">
+              {isPending
+                ? "Saving changes…"
+                : displayedPlantings.length
+                ? "Toggle spacing guides to inspect layout clearances."
+                : "Drag plants into the bed to start planning."}
+            </div>
+          </>
         ) : (
           <p className="text-sm text-slate-500">
             Add a bed to this garden to start planning layouts.
@@ -1683,18 +1798,29 @@ function SpacingGuideOverlay({ guides, formatDistance }: SpacingGuideOverlayProp
       >
         {guides.map((guide) => {
           const isActive = hoveredGuideId === guide.id || pinnedGuideId === guide.id;
-          const stroke = isActive ? "rgba(37, 99, 235, 0.95)" : "rgba(59, 130, 246, 0.65)";
-          const strokeWidth = isActive ? 2 : 1.4;
+          const stroke = isActive ? "rgba(14, 116, 144, 0.9)" : "rgba(13, 148, 136, 0.55)";
+          const strokeWidth = isActive ? 1.4 : 0.9;
+          const lineProps =
+            guide.orientation === "horizontal"
+              ? {
+                  x1: guide.startPercent,
+                  y1: guide.constantPercent,
+                  x2: guide.endPercent,
+                  y2: guide.constantPercent,
+                }
+              : {
+                  x1: guide.constantPercent,
+                  y1: guide.startPercent,
+                  x2: guide.constantPercent,
+                  y2: guide.endPercent,
+                };
           return (
             <line
               key={guide.id}
-              x1={guide.x1Percent}
-              y1={guide.y1Percent}
-              x2={guide.x2Percent}
-              y2={guide.y2Percent}
+              {...lineProps}
               stroke={stroke}
               strokeWidth={strokeWidth}
-              strokeDasharray="6 4"
+              strokeDasharray="4 3"
               strokeLinecap="round"
               className="cursor-pointer outline-none"
               style={{ pointerEvents: "stroke" }}
@@ -1725,8 +1851,8 @@ function SpacingGuideOverlay({ guides, formatDistance }: SpacingGuideOverlayProp
         return (
           <div
             key={`${guide.id}-label`}
-            className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-slate-900/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white shadow"
-            style={{ left: `${guide.midpointXPercent}%`, top: `${guide.midpointYPercent}%` }}
+            className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-slate-900/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white shadow"
+            style={{ left: `${guide.labelXPercent}%`, top: `${guide.labelYPercent}%` }}
           >
             {formatDistance(guide.distanceCm)}
           </div>
