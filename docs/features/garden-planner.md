@@ -1,0 +1,37 @@
+# Garden planner reference
+
+## Data flow and prerequisites
+The `/garden` page maps Prisma garden, bed, planting, and focus records into the plain data structures that the `GardenPlanner` component expects, and it injects the signed-in user’s measurement preferences so every layout control formats in their chosen units.【F:app/garden/page.tsx†L1-L117】 The planner itself defines the `PlannerGarden`, `PlannerBed`, `PlannerPlanting`, `PlannerPlant`, and measurement helper types at the top of the module so consumer code knows exactly which fields must be provided (IDs, centimetre-based dimensions, optional imagery, etc.).【F:src/components/garden/garden-planner.tsx†L20-L118】
+
+Within the client component we keep local state for the active garden/bed, grid density, pending drop previews, focus filters, and measurement anchors. The active bed drives grid rendering, measurement overlays, and all placement calculations, so always confirm `selectedGardenId`/`selectedBedId` are set before invoking planner callbacks.【F:src/components/garden/garden-planner.tsx†L321-L402】
+
+## Grid and canvas controls
+The planner renders a CSS-driven grid background using the current cell size, with distinct major/minor guides to keep spacing predictable regardless of bed aspect ratio.【F:src/components/garden/garden-planner.tsx†L363-L387】 Users can change the grid resolution via the “Grid size” select; the component guards against values below 1 cm and translates centimetres into formatted unit labels automatically.【F:src/components/garden/garden-planner.tsx†L1321-L1334】 Focus mode is handled entirely client-side—toggling “Focus only” hides any planting that isn’t focused by bed, planting, or plant ID.【F:src/components/garden/garden-planner.tsx†L1336-L1348】【F:src/components/garden/garden-planner.tsx†L439-L462】
+
+Because the grid element is positioned absolutely inside the bed wrapper, overlays such as pending placement cards and measurement lines never distort grid spacing; text instructions live outside the canvas to avoid the layout shifts reported earlier.【F:src/components/garden/garden-planner.tsx†L1438-L1599】
+
+## Dragging plants and committing placements
+Dragging a plant card from the library sets `pendingPlacement`, which records the drop coordinates and spacing guidance derived from the species’ stored in-row/between-row values (falling back to 30 cm when the plant data is missing).【F:src/components/garden/garden-planner.tsx†L327-L337】【F:src/components/garden/garden-planner.tsx†L1004-L1053】 Users can accept the preview in three modes:
+
+* **Single** – place exactly where dropped if the spot is free.【F:src/components/garden/garden-planner.tsx†L1079-L1084】
+* **Fill width** – find the nearest open row and fill it horizontally at the requested spacing, with a fallback to the drop column if nothing fits.【F:src/components/garden/garden-planner.tsx†L1085-L1106】
+* **Fill length** – mirror the width logic but down the column to create successive rows.【F:src/components/garden/garden-planner.tsx†L1107-L1127】
+
+Every accepted placement is rounded to whole centimetres, batched into `createPlantings`, and posted to `/api/plantings`, ensuring server reminders are scheduled for each planting.【F:src/components/garden/garden-planner.tsx†L1018-L1155】【F:src/components/garden/garden-planner.tsx†L760-L780】 The inline toast feedback covers success and common validation errors (“No available space”, “Bed details incomplete”) so UX remains responsive without waiting for a full page refresh.【F:src/components/garden/garden-planner.tsx†L1131-L1155】【F:src/components/garden/garden-planner.tsx†L701-L757】
+
+## Measurement mode
+The “Measure spacing” button toggles measurement mode for beds that already contain plantings. When enabled we reset prior selections and change the canvas cursor to a crosshair so clicks on bed edges or plant markers register as measurement anchors/targets.【F:src/components/garden/garden-planner.tsx†L1350-L1525】 Edge hit zones occupy the outer four pixels of the bed, letting gardeners capture distances to any border without misaligning the grid.【F:src/components/garden/garden-planner.tsx†L1459-L1484】 Plant markers visually reflect their current role (anchor, target, or neutral) and expose keyboard/assistive-triggered measurement support via `onMeasureSelect`.【F:src/components/garden/garden-planner.tsx†L1496-L1539】【F:src/components/garden/garden-planner.tsx†L1751-L2007】
+
+Distances are rendered with a lightweight SVG overlay that produces horizontal and vertical dashed guides plus labelled markers. The overlay deduplicates anchor markers, clamps label placement within the bed, and formats distances through the injected measurement preferences, keeping units consistent with the rest of the app.【F:src/components/garden/garden-planner.tsx†L2111-L2185】 The status text below the bed describes what to do next (“Select a bed edge…”) and reports the resolved horizontal/vertical measurements once both endpoints are chosen.【F:src/components/garden/garden-planner.tsx†L474-L500】【F:src/components/garden/garden-planner.tsx†L1437-L1599】
+
+## Auto layout
+“Rearrange plants” runs a quick centroid-based distribution: it infers the number of rows/columns from the bed aspect ratio and current planting count, spaces markers evenly inside the bed, and patches each planting via `/api/plantings` with the new centimetre coordinates.【F:src/components/garden/garden-planner.tsx†L637-L699】 Measurement mode is automatically disabled during a redistribution to avoid stale overlays.【F:src/components/garden/garden-planner.tsx†L657-L659】 Toasts reflect success or the first failure returned by the parallel PATCH requests.【F:src/components/garden/garden-planner.tsx†L686-L695】 If you need spacing-aware redistribution, consider extending this helper—see the TODO list for notes on reusing species spacing in a future iteration.
+
+## Focus and context actions
+Each planting marker hosts a hover/focus popover with planting dates, maturity data, note editing, focus toggles, and delete actions. Popovers render through `createPortal` so they never clip against the bed container, and every interaction triggers toasts plus a router refresh to keep local state aligned with the server.【F:src/components/garden/garden-planner.tsx†L1751-L2094】 Focus toggles call `/api/focus` internally and immediately update the client filter sets so focus-only mode reflects the change without a full reload.【F:src/components/garden/garden-planner.tsx†L452-L520】
+
+When adding or removing beds/gardens, the planner wraps API calls with confirmation prompts, server validation handling, and toast feedback. After destructive operations we redirect the selection to the next available bed/garden and refresh the router so the UI cannot reference deleted records.【F:src/components/garden/garden-planner.tsx†L701-L758】【F:src/components/garden/garden-planner.tsx†L960-L989】
+
+## Create additional beds and gardens
+The inline “Add a bed” form honours the user’s length unit preference when collecting width/length/height, converting to centimetres on submit before calling `/api/beds`. Validation errors surface through the shared toast system so users can correct mistakes without losing their progress.【F:src/components/garden/garden-planner.tsx†L1404-L1583】 For new gardens, reuse the standalone `CreateGardenForm` component—it mirrors the same conversion logic and POSTs to `/api/garden` with rounded centimetre dimensions.【F:src/components/garden/create-garden-form.tsx†L1-L83】
+
