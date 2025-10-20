@@ -8,6 +8,14 @@ import { useRouter } from "next/navigation";
 import type { FocusKind } from "@prisma/client";
 import { Button } from "../ui/button";
 import { useToast } from "../ui/toast";
+import {
+  convertLengthFromCm,
+  convertLengthToCm,
+  formatLength,
+  getLengthStep,
+  getLengthUnitSymbol,
+  type MeasurementPreferences,
+} from "@/src/lib/units";
 
 // Roughly 30cm (~12") mirrors average spacing recommendations for many kitchen garden staples.
 const DEFAULT_SPACING_CM = 30;
@@ -57,6 +65,17 @@ type PlannerPlant = {
   spacingBetweenRowsCm: number | null;
 };
 
+type SpacingGuide = {
+  id: string;
+  orientation: "horizontal" | "vertical";
+  startPercent: number;
+  endPercent: number;
+  constantPercent: number;
+  labelXPercent: number;
+  labelYPercent: number;
+  distanceCm: number;
+};
+
 type PendingPlacement = {
   bedId: string;
   plant: PlannerPlant;
@@ -85,6 +104,7 @@ export type GardenPlannerProps = {
   gardens: PlannerGarden[];
   plants: PlannerPlant[];
   focusItems: PlannerFocusItem[];
+  measurement: MeasurementPreferences;
 };
 
 function snapToCellCenter(xCm: number, yCm: number, cellSizeCm = DEFAULT_CELL_SIZE_CM) {
@@ -105,7 +125,7 @@ function clampToBed(value: number, max: number, cellSizeCm: number) {
   return Math.min(Math.max(value, halfCell), Math.max(halfCell, max - halfCell));
 }
 
-export function GardenPlanner({ gardens, plants, focusItems: initialFocus }: GardenPlannerProps) {
+export function GardenPlanner({ gardens, plants, focusItems: initialFocus, measurement }: GardenPlannerProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [selectedGardenId, setSelectedGardenId] = useState(gardens[0]?.id ?? "");
@@ -116,8 +136,24 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus }: Gar
   const [focusItems, setFocusItems] = useState(initialFocus);
   const [showFocusOnly, setShowFocusOnly] = useState(false);
   const [dragPreview, setDragPreview] = useState<DragPreview | null>(null);
+  const [showSpacingGuides, setShowSpacingGuides] = useState(false);
   const bedRef = useRef<HTMLDivElement | null>(null);
   const { pushToast } = useToast();
+  const lengthUnit = measurement.lengthUnit;
+  const lengthSymbol = getLengthUnitSymbol(lengthUnit);
+  const minBedWidthCm = 10;
+  const minBedLengthCm = 30;
+  const minBedHeightCm = 10;
+  const minBedWidth = convertLengthFromCm(minBedWidthCm, lengthUnit);
+  const minBedLength = convertLengthFromCm(minBedLengthCm, lengthUnit);
+  const minBedHeight = convertLengthFromCm(minBedHeightCm, lengthUnit);
+  const lengthStep = getLengthStep(lengthUnit);
+  const formatLengthInput = (cm: number) => {
+    const value = convertLengthFromCm(cm, lengthUnit);
+    if (!Number.isFinite(value)) return "";
+    const precision = lengthUnit === "CENTIMETERS" ? 0 : 2;
+    return value.toFixed(precision);
+  };
 
   const activeGarden = gardens.find((garden) => garden.id === selectedGardenId) ?? gardens[0];
   const activeBed =
@@ -205,11 +241,180 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus }: Gar
     );
   }, [activeBed, focusBedIds, focusPlantIds, focusPlantingIds, showFocusOnly]);
 
+  const spacingGuides = useMemo<SpacingGuide[]>(() => {
+    if (!showSpacingGuides || !activeBed) return [];
+    if (!bedWidthCm || !bedLengthCm) return [];
+    if (!displayedPlantings.length) return [];
+
+    const safeWidth = Math.max(0.0001, bedWidthCm);
+    const safeLength = Math.max(0.0001, bedLengthCm);
+    const placements = displayedPlantings.map((planting) => {
+      const xCm = planting.positionX ?? bedWidthCm / 2;
+      const yCm = planting.positionY ?? bedLengthCm / 2;
+      return { id: planting.id, xCm, yCm };
+    });
+
+    const guides: SpacingGuide[] = [];
+    const maxGuides = 800;
+
+    const toPercent = (value: number, total: number) => (value / total) * 100;
+    const clampPercent = (value: number) => Math.min(98, Math.max(2, value));
+
+    const pushHorizontal = (
+      id: string,
+      startX: number,
+      endX: number,
+      constantY: number,
+      distance: number,
+      labelYOffset = -3,
+    ) => {
+      if (guides.length >= maxGuides) return;
+      if (distance <= 0.5) return;
+      const startPercent = toPercent(Math.min(startX, endX), safeWidth);
+      const endPercent = toPercent(Math.max(startX, endX), safeWidth);
+      if (Math.abs(endPercent - startPercent) < 0.5) return;
+      const constantPercent = clampPercent(toPercent(constantY, safeLength));
+      const labelXPercent = (startPercent + endPercent) / 2;
+      const labelYPercent = clampPercent(constantPercent + labelYOffset);
+      guides.push({
+        id,
+        orientation: "horizontal",
+        startPercent,
+        endPercent,
+        constantPercent,
+        labelXPercent,
+        labelYPercent,
+        distanceCm: distance,
+      });
+    };
+
+    const pushVertical = (
+      id: string,
+      startY: number,
+      endY: number,
+      constantX: number,
+      distance: number,
+      labelXOffset = 3,
+    ) => {
+      if (guides.length >= maxGuides) return;
+      if (distance <= 0.5) return;
+      const startPercent = toPercent(Math.min(startY, endY), safeLength);
+      const endPercent = toPercent(Math.max(startY, endY), safeLength);
+      if (Math.abs(endPercent - startPercent) < 0.5) return;
+      const constantPercent = clampPercent(toPercent(constantX, safeWidth));
+      const labelXPercent = clampPercent(constantPercent + labelXOffset);
+      const labelYPercent = (startPercent + endPercent) / 2;
+      guides.push({
+        id,
+        orientation: "vertical",
+        startPercent,
+        endPercent,
+        constantPercent,
+        labelXPercent,
+        labelYPercent,
+        distanceCm: distance,
+      });
+    };
+
+    for (let index = 0; index < placements.length; index += 1) {
+      const current = placements[index];
+
+      // Distances to bed edges (horizontal & vertical)
+      const distanceLeft = current.xCm;
+      const distanceRight = safeWidth - current.xCm;
+      if (distanceLeft <= distanceRight) {
+        const yOffset = Math.min(5, safeLength * 0.02);
+        pushHorizontal(
+          `${current.id}-edge-left`,
+          0,
+          current.xCm,
+          Math.max(0, current.yCm - yOffset),
+          distanceLeft,
+        );
+      } else {
+        const yOffset = Math.min(5, safeLength * 0.02);
+        pushHorizontal(
+          `${current.id}-edge-right`,
+          current.xCm,
+          safeWidth,
+          Math.min(safeLength, current.yCm + yOffset),
+          distanceRight,
+          3,
+        );
+      }
+
+      const distanceTop = current.yCm;
+      const distanceBottom = safeLength - current.yCm;
+      if (distanceTop <= distanceBottom) {
+        const xOffset = Math.min(5, safeWidth * 0.02);
+        pushVertical(
+          `${current.id}-edge-top`,
+          0,
+          current.yCm,
+          Math.max(0, current.xCm - xOffset),
+          distanceTop,
+          -3,
+        );
+      } else {
+        const xOffset = Math.min(5, safeWidth * 0.02);
+        pushVertical(
+          `${current.id}-edge-bottom`,
+          current.yCm,
+          safeLength,
+          Math.min(safeWidth, current.xCm + xOffset),
+          distanceBottom,
+        );
+      }
+
+      for (let inner = index + 1; inner < placements.length; inner += 1) {
+        if (guides.length >= maxGuides) {
+          return guides;
+        }
+        const comparison = placements[inner];
+        const deltaX = Math.abs(comparison.xCm - current.xCm);
+        const deltaY = Math.abs(comparison.yCm - current.yCm);
+
+        const horizontalY = (current.yCm + comparison.yCm) / 2;
+        pushHorizontal(
+          `${current.id}:${comparison.id}:horizontal`,
+          current.xCm,
+          comparison.xCm,
+          horizontalY,
+          deltaX,
+        );
+
+        const verticalX = (current.xCm + comparison.xCm) / 2;
+        pushVertical(
+          `${current.id}:${comparison.id}:vertical`,
+          current.yCm,
+          comparison.yCm,
+          verticalX,
+          deltaY,
+        );
+      }
+    }
+
+    return guides;
+  }, [
+    showSpacingGuides,
+    activeBed,
+    bedWidthCm,
+    bedLengthCm,
+    displayedPlantings,
+  ]);
+
+  useEffect(() => {
+    if (!showSpacingGuides) return;
+    if (spacingGuides.length > 0) return;
+    setShowSpacingGuides(false);
+  }, [showSpacingGuides, spacingGuides.length]);
+
   const isActiveBedFocused = activeBed ? focusBedIds.has(activeBed.id) : false;
   const bedContainerClassName = [
-    "relative w-full rounded-lg border-2 bg-slate-50 shadow-[inset_0_0_0_2px_rgba(148,163,184,0.35)]",
+    "relative w-full overflow-hidden rounded-lg border-2 bg-slate-50 shadow-[inset_0_0_0_2px_rgba(148,163,184,0.35)]",
     isActiveBedFocused ? "border-primary ring-4 ring-primary/30" : "border-slate-400",
   ].join(" ");
+
 
   const toggleFocus = useCallback(
     (kind: PlannerFocusItem["kind"], targetId: string, label?: string) => {
@@ -266,13 +471,24 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus }: Gar
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const name = String(form.get("bedName") ?? "").trim();
-    const width = Number(form.get("bedWidth"));
-    const length = Number(form.get("bedLength"));
-    const height = Number(form.get("bedHeight"));
-    if (!name || Number.isNaN(width) || Number.isNaN(length) || Number.isNaN(height)) {
+    const widthValue = Number(form.get("bedWidth"));
+    const lengthValue = Number(form.get("bedLength"));
+    const heightValue = Number(form.get("bedHeight"));
+    if (!name || Number.isNaN(widthValue) || Number.isNaN(lengthValue) || Number.isNaN(heightValue)) {
       pushToast({
         title: "Bed details incomplete",
         description: "Add a name and numeric dimensions before creating a bed.",
+        variant: "error",
+      });
+      return;
+    }
+    const widthCm = convertLengthToCm(widthValue, lengthUnit);
+    const lengthCm = convertLengthToCm(lengthValue, lengthUnit);
+    const heightCm = convertLengthToCm(heightValue, lengthUnit);
+    if (!Number.isFinite(widthCm) || !Number.isFinite(lengthCm) || !Number.isFinite(heightCm)) {
+      pushToast({
+        title: "Bed dimensions invalid",
+        description: "Please provide numeric values for each measurement.",
         variant: "error",
       });
       return;
@@ -284,9 +500,9 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus }: Gar
         body: JSON.stringify({
           gardenId: activeGarden.id,
           name,
-          widthCm: width,
-          lengthCm: length,
-          heightCm: height,
+          widthCm: Math.round(widthCm),
+          lengthCm: Math.round(lengthCm),
+          heightCm: Math.round(heightCm),
         }),
       });
       if (!response.ok) {
@@ -838,8 +1054,10 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus }: Gar
                 >
                   {activeGarden.beds.map((bed) => (
                     <option key={bed.id} value={bed.id}>
-                      {bed.name} ({bed.widthCm}×{bed.lengthCm}cm base
-                      {bed.heightCm ? `, ${bed.heightCm}cm tall` : ""})
+                      {bed.name} ({formatLength(bed.widthCm, lengthUnit)} ×
+                      {" "}
+                      {formatLength(bed.lengthCm, lengthUnit)} base
+                      {bed.heightCm ? `, ${formatLength(bed.heightCm, lengthUnit)} tall` : ""})
                     </option>
                   ))}
                 </select>
@@ -877,7 +1095,7 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus }: Gar
               >
                 {[5, 10, 15, 20].map((size) => (
                   <option key={size} value={size}>
-                    {size} cm
+                    {formatLength(size, lengthUnit)} ({size} cm)
                   </option>
                 ))}
               </select>
@@ -895,6 +1113,18 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus }: Gar
             {focusItems.length ? (
               <span className="text-xs font-medium text-slate-500">{focusItems.length} focus items</span>
             ) : null}
+            <button
+              type="button"
+              onClick={() => displayedPlantings.length && setShowSpacingGuides((value) => !value)}
+              disabled={!displayedPlantings.length}
+              className={`rounded px-3 py-1 text-xs font-semibold uppercase tracking-wide transition ${
+                showSpacingGuides
+                  ? "bg-slate-900 text-white"
+                  : "border border-slate-700 text-slate-700 hover:border-slate-900 hover:text-slate-900"
+              } ${!displayedPlantings.length ? "cursor-not-allowed opacity-40" : ""}`}
+            >
+              {showSpacingGuides ? "Hide spacing guides" : "Show spacing guides"}
+            </button>
           </div>
         </div>
         {activeGarden ? (
@@ -915,34 +1145,37 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus }: Gar
                 />
               </label>
               <label className="space-y-1 text-xs font-medium text-slate-600">
-                Width (cm)
+                Width ({lengthSymbol})
                 <input
                   name="bedWidth"
                   type="number"
-                  min={10}
-                  defaultValue={activeGarden.widthCm}
+                  min={Number(formatLengthInput(minBedWidthCm))}
+                  step={lengthStep}
+                  defaultValue={formatLengthInput(activeGarden.widthCm)}
                   className="w-full rounded border border-slate-300 px-2 py-1 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
                   required
                 />
               </label>
               <label className="space-y-1 text-xs font-medium text-slate-600">
-                Length (cm)
+                Length ({lengthSymbol})
                 <input
                   name="bedLength"
                   type="number"
-                  min={30}
-                  defaultValue={activeGarden.lengthCm}
+                  min={Number(formatLengthInput(minBedLengthCm))}
+                  step={lengthStep}
+                  defaultValue={formatLengthInput(activeGarden.lengthCm)}
                   className="w-full rounded border border-slate-300 px-2 py-1 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
                   required
                 />
               </label>
                 <label className="space-y-1 text-xs font-medium text-slate-600">
-                  Bed height (cm)
+                  Bed height ({lengthSymbol})
                   <input
                     name="bedHeight"
                     type="number"
-                    min={10}
-                    defaultValue={activeGarden.heightCm ?? 40}
+                    min={Number(formatLengthInput(minBedHeightCm))}
+                    step={lengthStep}
+                    defaultValue={formatLengthInput(activeGarden.heightCm ?? minBedHeightCm)}
                     className="w-full rounded border border-slate-300 px-2 py-1 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
                     required
                   />
@@ -956,155 +1189,182 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus }: Gar
           </form>
         ) : null}
         {activeBed ? (
-          <div>
+          <>
             <div className={bedContainerClassName} style={{ paddingBottom: `${(bedLengthCm / bedWidthCm) * 100}%` }}>
-              <div
-                ref={bedRef}
-                data-testid="garden-bed-canvas"
-                className="absolute inset-0"
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                style={bedGrid?.style}
-              >
-                <div className="pointer-events-none absolute left-1/2 top-2 z-10 -translate-x-1/2 rounded bg-white/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 shadow-sm">
-                  Width: {bedWidthCm} cm
-                </div>
-                <div className="pointer-events-none absolute right-2 top-1/2 z-10 -translate-y-1/2 -rotate-90 rounded bg-white/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 shadow-sm">
-                  Length: {bedLengthCm} cm
-                </div>
-                {bedGrid ? (
-                  <div className="pointer-events-none absolute bottom-2 left-2 z-10 rounded bg-white/80 px-2 py-0.5 text-[10px] font-medium text-slate-600 shadow-sm">
-                    Grid: {bedGrid.cellCm}cm
-                  </div>
-                ) : null}
-                {displayedPlantings.map((planting) => {
-                  const left = planting.positionX ?? bedWidthCm / 2;
-                  const top = planting.positionY ?? bedLengthCm / 2;
-                  const leftPercent = (left / bedWidthCm) * 100;
-                  const topPercent = (top / bedLengthCm) * 100;
-                  const isPlantingFocused =
-                    isActiveBedFocused ||
-                    focusPlantingIds.has(planting.id) ||
-                    focusPlantIds.has(planting.plantId);
-                  return (
-                    <PlantingMarker
-                      key={planting.id}
-                      planting={planting}
-                      leftPercent={leftPercent}
-                      topPercent={topPercent}
-                      iconSize={bedIconSizePx}
-                      onDelete={handleDeletePlanting}
-                      onUpdateDetails={handleUpdatePlantingDetails}
-                      onToggleFocus={() => toggleFocus("planting", planting.id, planting.plantName)}
-                      isFocused={isPlantingFocused}
-                      dimmed={!isPlantingFocused && focusItems.length > 0 && !showFocusOnly}
-                      bedId={activeBed.id}
-                      bedWidthCm={bedWidthCm}
-                      bedLengthCm={bedLengthCm}
-                      bedRef={bedRef}
-                      onDragPreview={(preview) => setDragPreview(preview)}
-                      isPending={isPending}
-                    />
-                  );
-                })}
-                {dragPreview && dragPreview.bedId === activeBed.id ? (
-                  <>
-                    <div className="pointer-events-none absolute inset-0">
-                      <div
-                        className="absolute left-0 h-px w-full border-t border-dashed border-primary/50"
-                        style={{ top: `${dragPreview.topPercent}%` }}
-                      />
-                      <div
-                        className="absolute top-0 h-full w-px border-l border-dashed border-primary/50"
-                        style={{ left: `${dragPreview.leftPercent}%` }}
-                      />
+              <div className="absolute inset-0 overflow-hidden">
+                <div aria-hidden className="pointer-events-none absolute inset-0" style={bedGrid?.style} />
+                <div
+                  ref={bedRef}
+                  data-testid="garden-bed-canvas"
+                  className="relative h-full w-full"
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                >
+                  <div className="pointer-events-none absolute inset-0">
+                    <div className="absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded bg-white/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 shadow-sm">
+                      Width: {formatLength(bedWidthCm, lengthUnit)}
                     </div>
-                    <div
-                      className="pointer-events-none absolute flex items-center justify-center rounded-full border-2 border-primary/60 bg-primary/10"
-                      style={{
-                        left: `${dragPreview.leftPercent}%`,
-                        top: `${dragPreview.topPercent}%`,
-                        width: Math.max(16, bedIconSizePx * 0.6),
-                        height: Math.max(16, bedIconSizePx * 0.6),
-                        transform: "translate(-50%, -50%)",
-                      }}
-                    />
-                  </>
-                ) : null}
-                {pendingPlacement && pendingPlacement.bedId === activeBed.id ? (
-                  <>
-                    <div className="pointer-events-none absolute inset-0">
-                      <div
-                        className="absolute left-0 h-px w-full bg-primary/30"
-                        style={{ top: `${pendingPlacement.topPercent}%` }}
-                      />
-                      <div
-                        className="absolute top-0 h-full w-px bg-primary/30"
-                        style={{ left: `${pendingPlacement.leftPercent}%` }}
-                      />
+                    <div className="absolute right-2 top-1/2 z-20 -translate-y-1/2 -rotate-90 rounded bg-white/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 shadow-sm">
+                      Length: {formatLength(bedLengthCm, lengthUnit)}
                     </div>
-                    <div
-                      data-testid="pending-placement"
-                      className="absolute z-20 w-60 max-w-[16rem] -translate-x-1/2 translate-y-3 space-y-2 rounded-lg border border-slate-200 bg-white p-3 text-left shadow-lg"
-                      style={{ left: `${pendingPlacement.leftPercent}%`, top: `${pendingPlacement.topPercent}%` }}
-                    >
-                      <p className="text-xs font-semibold text-slate-700">
-                        Plan {pendingPlacement.plant.name}
-                      </p>
-                      <p className="text-[11px] text-slate-500">
-                        Use spacing of {getSpacing(pendingPlacement.plant).inRow}cm in-row and
-                        {" "}
-                        {getSpacing(pendingPlacement.plant).between}cm between rows.
-                      </p>
-                      <div className="grid grid-cols-3 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => commitPlacement("width")}
-                          className="flex flex-col items-center gap-2 rounded border border-slate-200 p-2 text-[11px] font-medium text-slate-600 transition hover:border-primary hover:bg-primary/5 hover:text-primary"
-                        >
-                          <span className="flex h-10 w-full items-center justify-center">
-                            <span className="h-1 w-full rounded bg-primary/70" />
-                          </span>
-                          Fill width
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => commitPlacement("length")}
-                          className="flex flex-col items-center gap-2 rounded border border-slate-200 p-2 text-[11px] font-medium text-slate-600 transition hover:border-primary hover:bg-primary/5 hover:text-primary"
-                        >
-                          <span className="flex h-10 w-full items-center justify-center">
-                            <span className="h-full w-1 rounded bg-primary/70" />
-                          </span>
-                          Fill length
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => commitPlacement("single")}
-                          className="flex flex-col items-center gap-2 rounded border border-slate-200 p-2 text-[11px] font-medium text-slate-600 transition hover:border-primary hover:bg-primary/5 hover:text-primary"
-                        >
-                          <span className="flex h-10 w-full items-center justify-center">
-                            <span className="h-2 w-2 rounded-full bg-primary/70" />
-                          </span>
-                          Single plant
-                        </button>
+                    {bedGrid ? (
+                      <div className="absolute bottom-2 left-2 z-20 rounded bg-white/80 px-2 py-0.5 text-[10px] font-medium text-slate-600 shadow-sm">
+                        Grid: {formatLength(bedGrid.cellCm, lengthUnit)}
                       </div>
-                      <button
-                        type="button"
-                        onClick={cancelPlacement}
-                        className="w-full text-[11px] font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </>
-                ) : null}
-                <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs font-medium text-slate-400">
-                  {isPending ? "Saving changes…" : "Drag plants here"}
+                    ) : null}
+                  </div>
+                  {showSpacingGuides ? (
+                    <SpacingGuideOverlay
+                      guides={spacingGuides}
+                      formatDistance={(value) => formatLength(value, lengthUnit)}
+                    />
+                  ) : null}
+                  {displayedPlantings.map((planting) => {
+                    const left = planting.positionX ?? bedWidthCm / 2;
+                    const top = planting.positionY ?? bedLengthCm / 2;
+                    const leftPercent = (left / bedWidthCm) * 100;
+                    const topPercent = (top / bedLengthCm) * 100;
+                    const isPlantingFocused =
+                      isActiveBedFocused ||
+                      focusPlantingIds.has(planting.id) ||
+                      focusPlantIds.has(planting.plantId);
+                    return (
+                      <PlantingMarker
+                        key={planting.id}
+                        planting={planting}
+                        leftPercent={leftPercent}
+                        topPercent={topPercent}
+                        iconSize={bedIconSizePx}
+                        onDelete={handleDeletePlanting}
+                        onUpdateDetails={handleUpdatePlantingDetails}
+                        onToggleFocus={() => toggleFocus("planting", planting.id, planting.plantName)}
+                        isFocused={isPlantingFocused}
+                        dimmed={!isPlantingFocused && focusItems.length > 0 && !showFocusOnly}
+                        bedId={activeBed.id}
+                        bedWidthCm={bedWidthCm}
+                        bedLengthCm={bedLengthCm}
+                        bedRef={bedRef}
+                        onDragPreview={(preview) => setDragPreview(preview)}
+                        isPending={isPending}
+                      />
+                    );
+                  })}
+                  {dragPreview && dragPreview.bedId === activeBed.id ? (
+                    <>
+                      <div className="pointer-events-none absolute inset-0">
+                        <div
+                          className="absolute left-0 h-px w-full border-t border-dashed border-primary/50"
+                          style={{ top: `${dragPreview.topPercent}%` }}
+                        />
+                        <div
+                          className="absolute top-0 h-full w-px border-l border-dashed border-primary/50"
+                          style={{ left: `${dragPreview.leftPercent}%` }}
+                        />
+                      </div>
+                      <div
+                        className="pointer-events-none absolute flex items-center justify-center rounded-full border-2 border-primary/60 bg-primary/10"
+                        style={{
+                          left: `${dragPreview.leftPercent}%`,
+                          top: `${dragPreview.topPercent}%`,
+                          width: Math.max(16, bedIconSizePx * 0.6),
+                          height: Math.max(16, bedIconSizePx * 0.6),
+                          transform: "translate(-50%, -50%)",
+                        }}
+                      />
+                    </>
+                  ) : null}
+                  {pendingPlacement && pendingPlacement.bedId === activeBed.id
+                    ? (() => {
+                        const spacing = getSpacing(pendingPlacement.plant);
+                        const inRowSpacing = formatLength(spacing.inRow, lengthUnit);
+                        const betweenSpacing = formatLength(spacing.between, lengthUnit);
+                        const dropXDisplay = formatLength(pendingPlacement.dropX, lengthUnit);
+                        const dropYDisplay = formatLength(pendingPlacement.dropY, lengthUnit);
+                        return (
+                          <>
+                            <div className="pointer-events-none absolute inset-0">
+                              <div
+                                className="absolute left-0 h-px w-full bg-primary/30"
+                                style={{ top: `${pendingPlacement.topPercent}%` }}
+                              />
+                              <div
+                                className="absolute top-0 h-full w-px bg-primary/30"
+                                style={{ left: `${pendingPlacement.leftPercent}%` }}
+                              />
+                            </div>
+                            <div
+                              data-testid="pending-placement"
+                              className="absolute z-30 w-60 max-w-[16rem] -translate-x-1/2 translate-y-3 space-y-2 rounded-lg border border-slate-200 bg-white p-3 text-left shadow-lg"
+                              style={{ left: `${pendingPlacement.leftPercent}%`, top: `${pendingPlacement.topPercent}%` }}
+                            >
+                              <p className="text-xs font-semibold text-slate-700">
+                                Plan {pendingPlacement.plant.name}
+                              </p>
+                              <p className="text-[11px] text-slate-500">
+                                Use spacing of {inRowSpacing} in-row and {betweenSpacing} between rows.
+                              </p>
+                              <div className="grid grid-cols-3 gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => commitPlacement("width")}
+                                  className="flex flex-col items-center gap-2 rounded border border-slate-200 p-2 text-[11px] font-medium text-slate-600 transition hover:border-primary hover:bg-primary/5 hover:text-primary"
+                                >
+                                  <span className="flex h-10 w-full items-center justify-center">
+                                    <span className="h-1 w-full rounded bg-primary/70" />
+                                  </span>
+                                  Fill width
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => commitPlacement("length")}
+                                  className="flex flex-col items-center gap-2 rounded border border-slate-200 p-2 text-[11px] font-medium text-slate-600 transition hover:border-primary hover:bg-primary/5 hover:text-primary"
+                                >
+                                  <span className="flex h-10 w-full items-center justify-center">
+                                    <span className="h-full w-1 rounded bg-primary/70" />
+                                  </span>
+                                  Fill length
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => commitPlacement("single")}
+                                  className="flex flex-col items-center gap-2 rounded border border-slate-200 p-2 text-[11px] font-medium text-slate-600 transition hover:border-primary hover:bg-primary/5 hover:text-primary"
+                                >
+                                  <span className="flex h-10 w-full items-center justify-center">
+                                    <span className="h-2 w-2 rounded-full bg-primary/70" />
+                                  </span>
+                                  Single plant
+                                </button>
+                              </div>
+                              <div className="flex items-center justify-between text-[11px] text-slate-500">
+                                <span>
+                                  Drop at {dropXDisplay} × {dropYDisplay}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="font-semibold text-primary hover:underline"
+                                  onClick={cancelPlacement}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          </>
+                        );
+                      })()
+                    : null}
+
                 </div>
               </div>
             </div>
-          </div>
+            <div className="mt-2 text-center text-xs font-medium text-slate-500">
+              {isPending
+                ? "Saving changes…"
+                : displayedPlantings.length
+                ? "Toggle spacing guides to inspect layout clearances."
+                : "Drag plants into the bed to start planning."}
+            </div>
+          </>
         ) : (
           <p className="text-sm text-slate-500">
             Add a bed to this garden to start planning layouts.
@@ -1364,7 +1624,7 @@ function PlantingMarker({
     <>
       <div
         data-testid={`planting-marker-${planting.id}`}
-        className={`absolute -translate-x-1/2 -translate-y-1/2 focus:outline-none ${dimmed ? "opacity-75" : ""}`}
+        className={`absolute z-30 -translate-x-1/2 -translate-y-1/2 focus:outline-none ${dimmed ? "opacity-75" : ""}`}
         style={{ left: `${leftPercent}%`, top: `${topPercent}%` }}
       >
         <div
@@ -1501,5 +1761,103 @@ function PlantingMarker({
           )
         : null}
     </>
+  );
+}
+
+type SpacingGuideOverlayProps = {
+  guides: SpacingGuide[];
+  formatDistance: (valueCm: number) => string;
+};
+
+function SpacingGuideOverlay({ guides, formatDistance }: SpacingGuideOverlayProps) {
+  const [hoveredGuideId, setHoveredGuideId] = useState<string | null>(null);
+  const [pinnedGuideId, setPinnedGuideId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!guides.length) {
+      setHoveredGuideId(null);
+      setPinnedGuideId(null);
+      return;
+    }
+    setPinnedGuideId((current) => {
+      if (!current) return current;
+      return guides.some((guide) => guide.id === current) ? current : null;
+    });
+  }, [guides]);
+
+  if (!guides.length) {
+    return null;
+  }
+
+  return (
+    <div className="absolute inset-0 z-10">
+      <svg
+        className="absolute inset-0 h-full w-full"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+      >
+        {guides.map((guide) => {
+          const isActive = hoveredGuideId === guide.id || pinnedGuideId === guide.id;
+          const stroke = isActive ? "rgba(14, 116, 144, 0.9)" : "rgba(13, 148, 136, 0.55)";
+          const strokeWidth = isActive ? 1.4 : 0.9;
+          const lineProps =
+            guide.orientation === "horizontal"
+              ? {
+                  x1: guide.startPercent,
+                  y1: guide.constantPercent,
+                  x2: guide.endPercent,
+                  y2: guide.constantPercent,
+                }
+              : {
+                  x1: guide.constantPercent,
+                  y1: guide.startPercent,
+                  x2: guide.constantPercent,
+                  y2: guide.endPercent,
+                };
+          return (
+            <line
+              key={guide.id}
+              {...lineProps}
+              stroke={stroke}
+              strokeWidth={strokeWidth}
+              strokeDasharray="4 3"
+              strokeLinecap="round"
+              className="cursor-pointer outline-none"
+              style={{ pointerEvents: "stroke" }}
+              onMouseEnter={() => setHoveredGuideId(guide.id)}
+              onMouseLeave={() => setHoveredGuideId(null)}
+              onFocus={() => setHoveredGuideId(guide.id)}
+              onBlur={() => setHoveredGuideId(null)}
+              onClick={(event) => {
+                event.stopPropagation();
+                setPinnedGuideId((current) => (current === guide.id ? null : guide.id));
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setPinnedGuideId((current) => (current === guide.id ? null : guide.id));
+                }
+              }}
+              tabIndex={0}
+              role="button"
+              aria-label={`Distance ${formatDistance(guide.distanceCm)}`}
+            />
+          );
+        })}
+      </svg>
+      {guides.map((guide) => {
+        const isActive = hoveredGuideId === guide.id || pinnedGuideId === guide.id;
+        if (!isActive) return null;
+        return (
+          <div
+            key={`${guide.id}-label`}
+            className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-slate-900/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white shadow"
+            style={{ left: `${guide.labelXPercent}%`, top: `${guide.labelYPercent}%` }}
+          >
+            {formatDistance(guide.distanceCm)}
+          </div>
+        );
+      })}
+    </div>
   );
 }

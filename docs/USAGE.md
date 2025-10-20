@@ -10,6 +10,7 @@
 
 ### Reminders, notifications, and toasts
 - Visit **Notifications** to review past alerts and manage rules (time-of-day digest, weather events, soil thresholds, etc.).
+- The **Notification activity** card filters in-app, email, and push history so you can audit what fired and when.
 - Toast notifications surface throughout the app for success, warnings, or errors and auto-dismiss after 10 seconds.
 - Focus items automatically escalate inside built-in rules like frost or overdue task checks.
 
@@ -23,6 +24,12 @@
 3. Configure the action payload by setting notification titles, messages, severity, delivery channel, and (for weather rules) whether to skip tasks when the rule fires. A live JSON preview updates as you tweak the guided form so you can confirm the underlying payload.
 4. Need something more specialised? Switch to **JSON editor** to paste or handcraft the `params` object directly. Toggling back to the guided builder attempts to hydrate the friendly controls from your JSON so you can fine-tune without losing structure.
 5. Submit the form to create the rule. It appears under **Your conditional rules** with a natural-language summary, quick enable/pause buttons, and an expandable JSON view for auditing.
+
+### Quiet hours and email delivery
+- Add SMTP credentials (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, optional `SMTP_SECURE`, `SMTP_FROM`) to `.env.local` so Gardenit can send outbound emails. Without credentials the server logs messages to the console for debugging.
+- Open **Settings → Notification preferences** to enable or disable email, push (email fallback), and in-app logging independently.
+- Pick the digest hour and timezone to control when the daily summary fires. Saving your changes updates the underlying RRULE so the scheduler emits the digest at the new time.
+- Toggle **Do not disturb** to mute email and push alerts between a start and end hour in your chosen timezone. Notifications that trigger during quiet hours stay in the in-app feed but aren’t delivered externally.
 
 ## Admin operations
 
