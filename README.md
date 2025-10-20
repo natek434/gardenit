@@ -39,6 +39,27 @@ Demo authentication credentials:
 
 See [`docs/USAGE.md`](docs/USAGE.md) for a walkthrough of core workflows, administrator tooling, and planting window maintenance tips.
 
+### Notification delivery
+
+Gardenit records every alert in the in-app feed and can optionally fan out email or push-style notifications. Configure SMTP credentials in `.env.local` so messages can be delivered:
+
+```bash
+SMTP_HOST=smtp.example.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=apikey
+SMTP_PASS=super-secret
+SMTP_FROM="Gardenit <hello@gardenit.nz>"
+```
+
+Once email is available, visit **Settings → Notification preferences** to:
+
+- Enable or disable email, push (email fallback), and in-app logging independently.
+- Pick the local hour and timezone for the daily digest rule—the scheduler keeps the RRULE in sync when you update the time.
+- Set a do not disturb window so email/push alerts pause overnight while in-app history continues to accumulate.
+
+Do not disturb windows apply to the selected timezone. If you skip a start or end hour the app falls back to the defaults (22:00–07:00). In-app notifications remain available even while quiet hours are active.
+
 ### Testing & Quality
 
 ```bash
@@ -86,19 +107,6 @@ pnpm perenual:sync
 The command checks which of the 100 targets are missing Perenual details in your database, fetches only the gaps, and records two sets of outcomes in `data/perenual-sync-log.json`:
 
 - `missingData` — plants that Perenual doesn't currently expose or that lack essential fields (description, sunlight, watering, soil, imagery). Future runs skip them until you delete the log entry.
-- `apiLimit` — plants skipped after rate-limit errors. Entries include a timestamp so the next run in the same day won't re-issue the request.
-
-Successful imports clear any existing log entries automatically.
-
-For day-to-day upkeep without exhausting your API quota, use the incremental sync helper:
-
-```
-pnpm perenual:sync
-```
-
-The command checks which of the 100 targets are missing Perenual details in your database, fetches only the gaps, and records two sets of outcomes in `data/perenual-sync-log.json`:
-
-- `missingData` — plants that Perenual doesn't currently expose, so future runs skip them until you delete the log entry.
 - `apiLimit` — plants skipped after rate-limit errors. Entries include a timestamp so the next run in the same day won't re-issue the request.
 
 Successful imports clear any existing log entries automatically.
