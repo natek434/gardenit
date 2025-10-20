@@ -414,22 +414,6 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus, measu
     }
   }, [isMeasuring]);
 
-  useEffect(() => {
-    if (!isMeasuring) return;
-    setMeasurementAnchor((current) => {
-      if (!current || current.type !== "plant") return current;
-      return displayedPlantings.some((planting) => planting.id === current.plantingId)
-        ? current
-        : null;
-    });
-    setMeasurementTarget((current) => {
-      if (!current || current.type !== "plant") return current;
-      return displayedPlantings.some((planting) => planting.id === current.plantingId)
-        ? current
-        : null;
-    });
-  }, [displayedPlantings, isMeasuring]);
-
   const filteredPlants = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     if (!keyword) return plants;
@@ -463,6 +447,24 @@ export function GardenPlanner({ gardens, plants, focusItems: initialFocus, measu
 
   const hasPlantings = displayedPlantings.length > 0;
 
+
+  useEffect(() => {
+    if (!isMeasuring) return;
+    setMeasurementAnchor((current) => {
+      if (!current || current.type !== "plant") return current;
+      return displayedPlantings.some((planting) => planting.id === current.plantingId)
+        ? current
+        : null;
+    });
+    setMeasurementTarget((current) => {
+      if (!current || current.type !== "plant") return current;
+      return displayedPlantings.some((planting) => planting.id === current.plantingId)
+        ? current
+        : null;
+    });
+  }, [displayedPlantings, isMeasuring]);
+
+  
   const measurementLines = useMemo(
     () =>
       isMeasuring
