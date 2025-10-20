@@ -67,6 +67,7 @@ The Prisma schema (see `prisma/schema.prisma`) models users, plants, planting wi
 
 ### Importing plant data from Perenual
 - Add `PERENUAL_API_KEY` to your `.env.local`. Keys are available from [perenual.com](https://perenual.com/docs/api).
+- Optional: set `PERENUAL_DAILY_REQUEST_LIMIT` to the daily quota for your plan (defaults to `90` calls so a full sync of 100 plants stays under the Basic plan's allowance) and `PERENUAL_REQUEST_INTERVAL_MS` to the minimum gap between calls (defaults to `1200` ms, roughly 50 calls/minute).
 - Review the 100 common vegetables, herbs, and fruits listed in `data/perenual-targets.ts`. Adjust the list or categories if you need different crops.
 - Run the importer to fetch JSON from the Perenual API and upsert the plants into your local database:
 
@@ -74,7 +75,20 @@ The Prisma schema (see `prisma/schema.prisma`) models users, plants, planting wi
   pnpm perenual:import
   ```
 
-The helper script automatically matches species by common name, fetches full detail payloads, and maps them to the extended Prisma schema. Any plants that cannot be matched are reported at the end so you can refine the target list or adjust the search term. The script is idempotent—rerunning it keeps data in sync with Perenual updates.
+The helper script automatically matches species by common name, fetches full detail payloads, and maps them to the extended Prisma schema. Any plants that cannot be matched are reported at the end so you can refine the target list or adjust the search term. If Perenual omits important fields (description, sunlight, watering, soil, or imagery) the importer logs a warning so you can revisit the record manually. The script is idempotent—rerunning it keeps data in sync with Perenual updates.
+
+For day-to-day upkeep without exhausting your API quota, use the incremental sync helper:
+
+```
+pnpm perenual:sync
+```
+
+The command checks which of the 100 targets are missing Perenual details in your database, fetches only the gaps, and records two sets of outcomes in `data/perenual-sync-log.json`:
+
+- `missingData` — plants that Perenual doesn't currently expose or that lack essential fields (description, sunlight, watering, soil, imagery). Future runs skip them until you delete the log entry.
+- `apiLimit` — plants skipped after rate-limit errors. Entries include a timestamp so the next run in the same day won't re-issue the request.
+
+Successful imports clear any existing log entries automatically.
 
 For day-to-day upkeep without exhausting your API quota, use the incremental sync helper:
 
@@ -93,7 +107,6 @@ Gardenit reads the following Perenual endpoints:
 
 - `GET /api/species-list` for initial IDs filtered by the names in `perenual-targets.ts`
 - `GET /api/species/details/:id` for sunlight, watering, toxicity, `sowing` month ranges, hardiness, and imagery
-- `GET /api/species-care-guide/:id` for additional descriptive text where available
 
 The `sowing` data in `species/details` maps directly to the `ClimatePlantWindow` month ranges used by Gardenit. Use the `growth` and `watering` objects from the same payload to populate manual imports when working offline.
 
