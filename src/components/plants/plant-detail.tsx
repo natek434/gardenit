@@ -4,10 +4,13 @@ import classNames from "classnames";
 import {
   CalendarClock,
   ChefHat,
+  Droplets,
   House,
   Pill,
+  Ruler,
   Skull,
   Sprout,
+  SunMedium,
   ThermometerSun,
   Utensils,
   Wrench,
@@ -80,6 +83,8 @@ export function PlantDetail({
     defaultImage?.localPath ??
     undefined;
 
+  const otherNames = (plant.otherNames ?? []).filter(Boolean) as string[];
+
   const edibleInfo = deriveEdibleInfo(plant);
   const toxicityInfo = deriveToxicityInfo(plant.poisonousToHumans, plant.poisonousToPets);
   const medicinalInfo = describeBoolean(plant.medicinal, "Medicinal uses noted", "No recorded medicinal use");
@@ -90,6 +95,17 @@ export function PlantDetail({
   const maintenanceTone = deriveMaintenanceTone(maintenanceSource);
 
   const quickFacts: QuickFact[] = [
+    {
+      title: "Spacing",
+      value: formatSpacing(plant.spacingInRowCm, plant.spacingBetweenRowsCm),
+      icon: Ruler,
+    },
+    { title: "Water", value: formatDescriptor(plant.waterGeneral), icon: Droplets },
+    {
+      title: "Sunlight",
+      value: formatSunlight(plant.sunRequirement, plant.sunlightExposure),
+      icon: SunMedium,
+    },
     { title: "Hardiness", value: formatHardiness(plant.hardinessMin, plant.hardinessMax), icon: ThermometerSun },
     {
       title: "Days to maturity",
@@ -164,12 +180,6 @@ export function PlantDetail({
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
-        <InfoCard title="Spacing" value={`${plant.spacingInRowCm ?? "--"}cm in-row`} helper={`Rows ${plant.spacingBetweenRowsCm ?? "--"}cm apart`} />
-        <InfoCard title="Water" value={plant.waterGeneral} />
-        <InfoCard title="Sunlight" value={plant.sunRequirement ?? formatList(plant.sunlightExposure)} />
-      </section>
-
       <QuickFactGrid facts={quickFacts} />
 
       <AttributeGroups plant={plant} />
@@ -181,54 +191,6 @@ export function PlantDetail({
     </div>
   );
 }
-
-type InfoCardProps = {
-  title: string;
-  value: string;
-  helper?: string;
-};
-
-function InfoCard({ title, value, helper }: InfoCardProps) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <h3 className="text-sm font-semibold text-slate-500">{title}</h3>
-      <p className="mt-2 text-lg text-slate-800">{value}</p>
-      {helper ? <p className="mt-1 text-xs text-slate-500">{helper}</p> : null}
-    </div>
-  );
-}
-
-type FactTone = "default" | "success" | "warning" | "danger";
-
-type QuickFact = {
-  title: string;
-  value: string;
-  icon: LucideIcon;
-  tone?: FactTone;
-};
-
-const factToneStyles: Record<FactTone, { icon: string; border: string; value: string }> = {
-  default: {
-    icon: "bg-slate-100 text-slate-600",
-    border: "border-slate-200",
-    value: "text-slate-700",
-  },
-  success: {
-    icon: "bg-emerald-100 text-emerald-700",
-    border: "border-emerald-200",
-    value: "text-emerald-700",
-  },
-  warning: {
-    icon: "bg-amber-100 text-amber-700",
-    border: "border-amber-200",
-    value: "text-amber-700",
-  },
-  danger: {
-    icon: "bg-rose-100 text-rose-700",
-    border: "border-rose-200",
-    value: "text-rose-700",
-  },
-};
 
 function QuickFactGrid({ facts }: { facts: QuickFact[] }) {
   return (
@@ -552,6 +514,27 @@ function formatList(values?: string[] | null, fallback?: string | null) {
   }
   if (fallback) return fallback;
   return "Not specified";
+}
+
+function formatSpacing(inRow?: number | null, betweenRows?: number | null) {
+  const parts: string[] = [];
+  if (typeof inRow === "number" && Number.isFinite(inRow)) {
+    parts.push(`${inRow}cm in-row`);
+  }
+  if (typeof betweenRows === "number" && Number.isFinite(betweenRows)) {
+    parts.push(`Rows ${betweenRows}cm apart`);
+  }
+  if (parts.length === 0) {
+    return "Not specified";
+  }
+  return parts.join(" • ");
+}
+
+function formatSunlight(sunRequirement?: string | null, exposures?: string[] | null) {
+  if (sunRequirement && sunRequirement.trim()) {
+    return sunRequirement.trim();
+  }
+  return formatList(exposures);
 }
 
 function formatHardiness(min?: string | null, max?: string | null) {
