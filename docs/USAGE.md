@@ -10,7 +10,7 @@
 
 ### Reminders, notifications, and toasts
 - Visit **Notifications** to review past alerts and manage rules (time-of-day digest, weather events, soil thresholds, etc.).
-- The **Notification activity** card filters in-app, email, and push history so you can audit what fired and when.
+- The **Notification inbox** filters by channel, highlights the rule that fired, and lets you mark items read or clear them individually or in bulk.
 - Toast notifications surface throughout the app for success, warnings, or errors and auto-dismiss after 10 seconds.
 - Focus items automatically escalate inside built-in rules like frost or overdue task checks.
 

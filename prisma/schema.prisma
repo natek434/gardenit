@@ -250,6 +250,8 @@ model Notification {
   channel   NotificationChannel
   dueAt     DateTime
   sentAt    DateTime?
+  readAt    DateTime?
+  clearedAt DateTime?
   meta      Json?
   user      User                @relation(fields: [userId], references: [id])
   rule      NotificationRule?   @relation(fields: [ruleId], references: [id])

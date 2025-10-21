@@ -551,7 +551,7 @@ async function dispatchDigest(
   if (!user.email || shouldMuteChannel(reference, "email", preferences, timeZone)) return;
   const since = new Date(reference.getTime() - rule.throttleSecs * 1000);
   const existing = await prisma.notification.findFirst({
-    where: { userId: user.id, ruleId: rule.id, dueAt: { gte: since } },
+    where: { userId: user.id, ruleId: rule.id, dueAt: { gte: since }, clearedAt: null },
   });
   if (existing) return;
 
@@ -813,7 +813,7 @@ async function dispatchNotification(
   }
   const since = new Date(reference.getTime() - rule.throttleSecs * 1000);
   const existing = await prisma.notification.findFirst({
-    where: { userId: user.id, ruleId: rule.id, dueAt: { gte: since } },
+    where: { userId: user.id, ruleId: rule.id, dueAt: { gte: since }, clearedAt: null },
   });
   if (existing) return existing;
   const notification = await prisma.notification.create({

@@ -1,12 +1,14 @@
 import { auth } from "@/src/lib/auth/options";
-import { getRemindersByUser } from "@/src/server/reminder-service";
 import { ConditionalRuleManager } from "@/src/components/reminders/conditional-rule-manager";
-import { SmartNotificationManager } from "@/src/components/reminders/smart-notification-manager";
 import { getNotificationRulesByUser } from "@/src/server/notification-rule-service";
 import { getNotificationsByUser } from "@/src/server/notification-service";
 import { NotificationFeed } from "@/src/components/notifications/notification-feed";
 
-export default async function NotificationsPage() {
+type NotificationsPageProps = {
+  searchParams?: { focus?: string };
+};
+
+export default async function NotificationsPage({ searchParams }: NotificationsPageProps) {
   const session = await auth();
   if (!session?.user?.id) {
     return (
@@ -16,23 +18,10 @@ export default async function NotificationsPage() {
       </div>
     );
   }
-  const [reminders, rules, notifications] = await Promise.all([
-    getRemindersByUser(session.user.id),
+  const [rules, notifications] = await Promise.all([
     getNotificationRulesByUser(session.user.id),
     getNotificationsByUser(session.user.id),
   ]);
-  const smartReminders = reminders
-    .filter((reminder) => reminder.type.startsWith("smart") || reminder.type === "weather-watering")
-    .map((reminder) => ({
-      id: reminder.id,
-      title: reminder.title,
-      details: reminder.details ?? null,
-      dueAt: reminder.dueAt.toISOString(),
-      cadence: reminder.cadence ?? null,
-      type: reminder.type,
-      sentAt: reminder.sentAt ? reminder.sentAt.toISOString() : null,
-    }));
-
   const conditionalRules = rules.map((rule) => ({
     id: rule.id,
     name: rule.name,
@@ -50,8 +39,12 @@ export default async function NotificationsPage() {
     severity: notification.severity,
     channel: notification.channel,
     dueAt: notification.dueAt.toISOString(),
+    readAt: notification.readAt ? notification.readAt.toISOString() : null,
+    ruleName: notification.rule?.name ?? null,
     meta: notification.meta ? JSON.parse(JSON.stringify(notification.meta)) : null,
   }));
+
+  const focusId = typeof searchParams?.focus === "string" ? searchParams?.focus : undefined;
 
   return (
     <div className="space-y-8">
@@ -66,13 +59,12 @@ export default async function NotificationsPage() {
         <div className="space-y-1">
           <h2 className="text-lg font-semibold text-slate-800">Notification activity</h2>
           <p className="text-sm text-slate-600">
-            Filter in-app, email, and push messages Gardenit recorded for your account.
+            Review notifications by rule, mark alerts as read, or clear items you no longer need.
           </p>
         </div>
-        <NotificationFeed notifications={notificationEntries} />
+        <NotificationFeed notifications={notificationEntries} initialFocusId={focusId} />
       </section>
       <ConditionalRuleManager initialRules={conditionalRules} />
-      <SmartNotificationManager initialReminders={smartReminders} />
     </div>
   );
 }
