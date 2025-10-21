@@ -1,0 +1,202 @@
+[
+  {
+    "plant": "Asparagus",
+    "bestCompanions": ["Basil", "Comfrey", "Marigolds", "Parsley", "Tomatoes"],
+    "worstCompanions": ["Beets", "Garlic", "Onions", "Potatoes"]
+  },
+  {
+    "plant": "Basil",
+    "bestCompanions": ["Chives", "Lettuce", "Oregano", "Marigolds", "Peppers", "Tomatoes"],
+    "worstCompanions": ["Cucumber", "Rue"]
+  },
+  {
+    "plant": "Beets",
+    "bestCompanions": ["Bush Beans", "Catnip", "Garlic", "Lettuce", "Onions"],
+    "worstCompanions": ["Mustard Greens", "Pole Beans"]
+  },
+  {
+    "plant": "Broccoli",
+    "bestCompanions": ["Bush Beans", "Carrots", "Chives", "Dill", "Garlic", "Lettuce", "Nasturtium", "Onion", "Rosemary", "Sage", "Spinach", "Swiss Chard", "Thyme"],
+    "worstCompanions": ["Peppers", "Pole Beans", "Squash", "Strawberry", "Tomatoes"]
+  },
+  {
+    "plant": "Bush Beans",
+    "bestCompanions": ["Carrots", "Celery", "Corn", "Cucumbers", "Lettuce", "Radishes", "Savory", "Swiss Chard", "Strawberries"],
+    "worstCompanions": ["Chives", "French Marigolds", "Garlic", "Leeks", "Onions", "Peppers", "Sunflowers", "Tomatoes"]
+  },
+  {
+    "plant": "Cabbage",
+    "bestCompanions": ["Celery", "Chamomile", "Dill", "Garlic", "Nasturtiums", "Onions", "Sage", "Thyme"],
+    "worstCompanions": ["Eggplant", "Grapes", "Peppers", "Pole Beans", "Strawberries", "Tomatoes"]
+  },
+  {
+    "plant": "Carrots",
+    "bestCompanions": ["Chives", "Leeks", "Lettuce", "Onion", "Parsley", "Rosemary", "Sage"],
+    "worstCompanions": ["Bush Beans", "Celery", "Cilantro", "Dill", "Parsnips", "Pole Beans", "Tomatoes"]
+  },
+  {
+    "plant": "Cauliflower",
+    "bestCompanions": ["Beans", "Carrots", "Chives", "Cucumber", "Dill", "Garlic", "Lettuce", "Nasturtium", "Onion", "Rosemary", "Sage", "Spinach", "Swiss Chard", "Thyme"],
+    "worstCompanions": ["Corn", "Peppers", "Squash", "Strawberry", "Tomatoes"]
+  },
+  {
+    "plant": "Chives",
+    "bestCompanions": ["Carrots", "Parsley", "Tomatoes"],
+    "worstCompanions": ["Asparagus", "Beans", "Peas", "Strawberries"]
+  },
+  {
+    "plant": "Cilantro",
+    "bestCompanions": ["Basil", "Lettuce", "Sage", "Spinach", "Thyme", "Tomatoes"],
+    "worstCompanions": ["Carrots", "Dill"]
+  },
+  {
+    "plant": "Corn",
+    "bestCompanions": ["Dill", "Melons", "Parsley", "Pole Beans", "Squash"],
+    "worstCompanions": ["Broccoli", "Cauliflower", "Cabbage", "Celery", "Eggplant", "Tomatoes"]
+  },
+  {
+    "plant": "Cucumber",
+    "bestCompanions": ["Bush Beans", "Corn", "Dill", "Lettuce", "Nasturtium", "Onion"],
+    "worstCompanions": ["Melons", "Pole Beans", "Potatoes", "Pumpkins", "Sage", "Rosemary"]
+  },
+  {
+    "plant": "Dill",
+    "bestCompanions": ["Broccoli", "Cabbage", "Cauliflower", "Corn", "Cucumber", "Lettuce", "Onion"],
+    "worstCompanions": ["Carrots", "Cilantro", "Peppers", "Tomatoes"]
+  },
+  {
+    "plant": "French Marigolds",
+    "bestCompanions": ["Carrots", "Melons", "Peppers", "Tomatoes"],
+    "worstCompanions": ["Bush Beans", "Peas", "Pole Beans"]
+  },
+  {
+    "plant": "Garlic",
+    "bestCompanions": ["Broccoli", "Cauliflower", "Lettuce", "Strawberry", "Tomatoes"],
+    "worstCompanions": ["Asparagus", "Bush Beans", "Peas", "Pole Beans"]
+  },
+  {
+    "plant": "Green Beans (Bush)",
+    "bestCompanions": ["Beets", "Carrots", "Corn", "Swiss Chard", "Radishes"],
+    "worstCompanions": ["Chives", "French Marigolds", "Garlic", "Leeks", "Onions", "Peppers", "Tomatoes"]
+  },
+  {
+    "plant": "Green Beans (Pole)",
+    "bestCompanions": ["Celery", "Corn", "Lettuce", "Radishes", "Savory", "Squash"],
+    "worstCompanions": ["Broccoli", "Cabbage", "Cauliflower", "Chives", "Garlic", "Leeks", "Marigolds", "Peppers", "Sunflowers", "Tomatoes"]
+  },
+  {
+    "plant": "Leeks",
+    "bestCompanions": ["Beets", "Carrots", "Celery", "Onion", "Spinach"],
+    "worstCompanions": ["Bush Beans", "Peas", "Pole Beans", "Turnips"]
+  },
+  {
+    "plant": "Lettuce",
+    "bestCompanions": ["Carrots", "Cucumber", "Dill", "Garlic", "Onion", "Spinach", "Strawberry", "Tomatoes"],
+    "worstCompanions": ["Parsley"]
+  },
+  {
+    "plant": "Marigold (Not French)",
+    "bestCompanions": ["Broccoli", "Cabbage", "Carrots", "Cauliflower", "Melons", "Peppers", "Tomatoes"],
+    "worstCompanions": []
+  },
+  {
+    "plant": "Melons",
+    "bestCompanions": ["Corn", "Marigold", "Nasturtium"],
+    "worstCompanions": ["Cabbage", "Cucumbers", "Kale", "Potatoes", "Squash"]
+  },
+  {
+    "plant": "Nasturtium",
+    "bestCompanions": ["Broccoli", "Cauliflower", "Cucumber", "Melons", "Tomatoes"],
+    "worstCompanions": []
+  },
+  {
+    "plant": "Onions",
+    "bestCompanions": ["Carrots", "Lettuce", "Radishes", "Swiss Chard", "Tomatoes"],
+    "worstCompanions": ["Asparagus", "Beans"]
+  },
+  {
+    "plant": "Oregano",
+    "bestCompanions": ["Basil", "Marjoram", "Peppers"],
+    "worstCompanions": []
+  },
+  {
+    "plant": "Parsley",
+    "bestCompanions": ["Asparagus", "Carrots", "Chives", "Onion", "Tomatoes"],
+    "worstCompanions": ["Lettuce"]
+  },
+  {
+    "plant": "Peas",
+    "bestCompanions": ["Carrots", "Corn", "Cucumber", "Radishes", "Spinach"],
+    "worstCompanions": ["Chives", "Garlic", "Leeks", "Onion", "Pole Beans"]
+  },
+  {
+    "plant": "Peppers",
+    "bestCompanions": ["Basil", "Carrots", "Oregano", "Rosemary", "Swiss Chard"],
+    "worstCompanions": ["Beans", "Broccoli", "Cauliflower", "Kale"]
+  },
+  {
+    "plant": "Pole Beans",
+    "bestCompanions": ["Corn", "Marjoram", "Radishes", "Squash"],
+    "worstCompanions": ["Broccoli", "Cauliflower", "Chives", "French Marigolds", "Garlic", "Kale", "Leeks", "Marigolds", "Peppers", "Sunflowers", "Tomatoes"]
+  },
+  {
+    "plant": "Potatoes",
+    "bestCompanions": ["Bush Beans", "Catnip", "Cilantro", "Horseradish", "Marigolds", "Nasturtiums"],
+    "worstCompanions": ["Asparagus", "Carrots", "Cucumbers", "Eggplant", "Peppers", "Pumpkins", "Squash", "Sunflowers", "Tomatoes"]
+  },
+  {
+    "plant": "Rosemary",
+    "bestCompanions": ["Broccoli", "Carrots", "Cauliflower"],
+    "worstCompanions": ["Basil", "Cilantro", "Parsley"]
+  },
+  {
+    "plant": "Sage",
+    "bestCompanions": ["Broccoli", "Cabbage", "Carrots", "Cauliflower", "Kale"],
+    "worstCompanions": ["Basil", "Cilantro", "Cucumber", "Rue"]
+  },
+  {
+    "plant": "Spinach",
+    "bestCompanions": ["Broccoli", "Cauliflower", "Leeks", "Lettuce", "Peas", "Radishes", "Strawberries"],
+    "worstCompanions": ["Cilantro", "Corn", "Melons", "Potatoes", "Sunflowers"]
+  },
+  {
+    "plant": "Strawberry",
+    "bestCompanions": ["Bush Beans", "Garlic", "Lettuce", "Onion", "Spinach", "Thyme"],
+    "worstCompanions": ["Broccoli", "Cabbage", "Cauliflower", "Peppers", "Pole Beans", "Tomatoes"]
+  },
+  {
+    "plant": "Summer Squash (+ Zucchini)",
+    "bestCompanions": ["Borage", "Bush Beans", "Corn", "Dill", "Marigolds", "Nasturtiums", "Radishes", "Yarrow"],
+    "worstCompanions": ["Cucumbers", "Potatoes", "Pumpkins", "Sunflowers", "Tomatoes"]
+  },
+  {
+    "plant": "Sunflower",
+    "bestCompanions": [],
+    "worstCompanions": ["Beans", "Cabbage", "Kale", "Peas", "Potatoes"]
+  },
+  {
+    "plant": "Sweet Potatoes",
+    "bestCompanions": ["Bush Beans", "Dill", "Marigolds", "Nasturtiums", "Thyme", "Yarrow"],
+    "worstCompanions": ["Corn", "Potatoes", "Pumpkins", "Squash", "Sunflowers", "Tomatoes"]
+  },
+  {
+    "plant": "Swiss Chard",
+    "bestCompanions": ["Beans", "Onion", "Peppers"],
+    "worstCompanions": ["Corn", "Potatoes", "Spinach"]
+  },
+  {
+    "plant": "Thyme",
+    "bestCompanions": ["Broccoli", "Cabbage", "Cauliflower", "Eggplant", "Strawberries"],
+    "worstCompanions": ["Basil", "Celery", "Cilantro", "Cucumbers", "Parsley"]
+  },
+  {
+    "plant": "Tomatoes",
+    "bestCompanions": ["Basil", "Chives", "Garlic", "Lettuce", "Marigold", "Nasturtium", "Onion", "Parsley", "Peppers"],
+    "worstCompanions": ["Beans", "Broccoli", "Cauliflower", "Corn", "Dill"]
+  },
+  {
+    "plant": "Winter Squash (+ Pumpkin)",
+    "bestCompanions": ["Borage", "Corn", "Dill", "Marigolds", "Nasturtiums", "Pole Beans", "Radishes", "Yarrow"],
+    "worstCompanions": ["Cucumbers", "Melons", "Potatoes", "Sunflowers", "Tomatoes"]
+  }
+]

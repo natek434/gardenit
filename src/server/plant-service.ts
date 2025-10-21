@@ -37,6 +37,7 @@ const plantSelect = Prisma.validator<Prisma.PlantSelect>()({
   pruningCount: true,
   seeds: true,
   attracts: true,
+  diseases: true,
   propagationMethods: true,
   hardinessMin: true,
   hardinessMax: true,
@@ -100,6 +101,7 @@ const plantAdminSelect = Prisma.validator<Prisma.PlantSelect>()({
   pruningCount: true,
   seeds: true,
   attracts: true,
+  diseases: true,
   propagationMethods: true,
   hardinessMin: true,
   hardinessMax: true,
@@ -258,10 +260,16 @@ export type PlantWithStatus = PlantBase & {
   status: AwaitedReturn<typeof getSeasonality>;
 };
 
+type RelationshipView = {
+  targetName: string;
+  targetPlant: { id: string; commonName: string } | null;
+  reason: string | null;
+};
+
 export type PlantWithRelations = PlantBase & {
   climateWindows: PlantWindow[];
-  companions: Array<{ plantB: { commonName: string }; reason: string | null }>;
-  antagonists: Array<{ plantB: { commonName: string }; reason: string | null }>;
+  companions: RelationshipView[];
+  antagonists: RelationshipView[];
   status: AwaitedReturn<typeof getSeasonality>;
 };
 
@@ -324,19 +332,36 @@ export const getPlant = cache(async (id: string, zone?: string) => {
           transplant: true,
         },
       },
-      companions: {
-        include: { plantB: { select: { commonName: true } } },
-        where: { type: "companion" },
-      },
-      antagonists: {
-        include: { plantB: { select: { commonName: true } } },
-        where: { type: "antagonist" },
+      relationships: {
+        select: {
+          targetName: true,
+          targetPlant: { select: { id: true, commonName: true } },
+          reason: true,
+          type: true,
+        },
       },
     },
   });
   if (!plant) return null;
   const status = await getSeasonality(new Date(), zone ?? plant.climateWindows[0]?.climateZoneId ?? "", plant.id);
-  return { ...plant, status } satisfies PlantWithRelations;
+
+  const { relationships, ...rest } = plant;
+  const mapRelationships = (type: "companion" | "antagonist") =>
+    relationships
+      .filter((relationship) => relationship.type === type)
+      .map(({ targetName, targetPlant, reason }) => ({
+        targetName,
+        targetPlant,
+        reason,
+      }))
+      .sort((a, b) => a.targetName.localeCompare(b.targetName, "en", { sensitivity: "base" }));
+
+  return {
+    ...rest,
+    companions: mapRelationships("companion"),
+    antagonists: mapRelationships("antagonist"),
+    status,
+  } satisfies PlantWithRelations;
 });
 
 export function getPlantsForAdmin(limit = 50) {
