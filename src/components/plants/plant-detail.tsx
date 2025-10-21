@@ -137,6 +137,8 @@ export function PlantDetail({
 
       <AttributeGroups plant={plant} />
 
+      <AttributeGroups plant={plant} />
+
       <section className="grid gap-4 md:grid-cols-2">
         <RelationCard title="Companions" relationships={plant.companions} empty="No companions listed." />
         <RelationCard title="Antagonists" relationships={plant.antagonists} variant="danger" empty="No antagonists listed." />
@@ -737,4 +739,116 @@ function formatRangeSet(range: unknown): string | null {
     return null;
   }
   return segments.join(", ");
+}
+
+function formatHardiness(min?: string | null, max?: string | null) {
+  if (!min && !max) {
+    return "Not specified";
+  }
+  if (min && max) {
+    return `Zones ${min}-${max}`;
+  }
+  if (min) {
+    return `Zones ${min}+`;
+  }
+  return `Up to zone ${max}`;
+}
+
+function formatEdibleParts(plant: PlantWithRelations) {
+  const parts: string[] = [];
+  if (plant.edibleFruit) parts.push("fruit");
+  if (plant.edibleLeaf) parts.push("leaf");
+  if (!parts.length) {
+    return "Not typically consumed";
+  }
+  if (parts.length === 2) {
+    return "Fruit and leaves";
+  }
+  return `${parts[0].charAt(0).toUpperCase()}${parts[0].slice(1)} only`;
+}
+
+function formatToxicity(poisonousToHumans?: boolean | null, poisonousToPets?: boolean | null) {
+  if (poisonousToHumans === undefined && poisonousToPets === undefined) {
+    return "Not specified";
+  }
+  if (poisonousToHumans && poisonousToPets) {
+    return "Toxic to humans and pets";
+  }
+  if (poisonousToHumans) {
+    return "Toxic to humans";
+  }
+  if (poisonousToPets) {
+    return "Toxic to pets";
+  }
+  if (poisonousToHumans === false && poisonousToPets === false) {
+    return "Safe for humans and pets";
+  }
+  if (poisonousToHumans === false) {
+    return "Safe for humans";
+  }
+  if (poisonousToPets === false) {
+    return "Safe for pets";
+  }
+  return "Not specified";
+}
+
+function renderWaterBenchmark(value: unknown): ReactNode {
+  if (!value || typeof value !== "object") {
+    return <span className="text-slate-400">Not specified</span>;
+  }
+  const { value: rawValue, unit } = value as { value?: unknown; unit?: unknown };
+  if (rawValue === null || rawValue === undefined || rawValue === "") {
+    return <span className="text-slate-400">Not specified</span>;
+  }
+  const cleanValue = typeof rawValue === "string" ? rawValue.replace(/^"|"$/g, "") : String(rawValue);
+  const cleanUnit = typeof unit === "string" && unit.trim() ? unit.trim() : "";
+  const suffix = cleanUnit ? ` ${cleanUnit}` : "";
+  return <span>{`Every ${cleanValue}${suffix}`}</span>;
+}
+
+function renderPruningCount(value: unknown): ReactNode {
+  if (!value || typeof value !== "object") {
+    return <span className="text-slate-400">Not specified</span>;
+  }
+  const { amount, interval } = value as { amount?: unknown; interval?: unknown };
+  if (amount === null || amount === undefined || interval === null || interval === undefined) {
+    return <span className="text-slate-400">Not specified</span>;
+  }
+  const cleanInterval = typeof interval === "string" ? interval : String(interval);
+  return <span>{`${amount} × ${cleanInterval}`}</span>;
+}
+
+function renderAnatomy(value: unknown): ReactNode {
+  if (!Array.isArray(value) || value.length === 0) {
+    return <span className="text-slate-400">Not specified</span>;
+  }
+  return (
+    <ul className="space-y-1">
+      {value.map((entry, index) => {
+        if (!entry || typeof entry !== "object") {
+          return (
+            <li key={index} className="text-sm text-slate-700">
+              {renderValue(entry)}
+            </li>
+          );
+        }
+        const { part, color } = entry as { part?: string; color?: string[] };
+        return (
+          <li key={part ?? index} className="text-sm text-slate-700">
+            <span className="font-medium">{part ?? "Part"}</span>
+            {color?.length ? <span className="text-slate-500"> — {color.join(", ")}</span> : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function humanizeLabel(label: string): string {
+  return label
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^./, (char) => char.toUpperCase());
 }
