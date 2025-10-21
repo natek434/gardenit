@@ -43,24 +43,24 @@ type QuickFact = {
 
 const factToneStyles: Record<FactTone, { icon: string; border: string; value: string }> = {
   default: {
-    icon: "bg-slate-100 text-slate-600",
-    border: "border-slate-200",
-    value: "text-slate-700",
+    icon: "bg-emerald-100 text-emerald-700",
+    border: "border-emerald-100/80",
+    value: "text-emerald-800",
   },
   success: {
-    icon: "bg-emerald-100 text-emerald-700",
+    icon: "bg-emerald-200 text-emerald-800",
     border: "border-emerald-200",
-    value: "text-emerald-700",
+    value: "text-emerald-800",
   },
   warning: {
     icon: "bg-amber-100 text-amber-700",
     border: "border-amber-200",
-    value: "text-amber-700",
+    value: "text-amber-800",
   },
   danger: {
     icon: "bg-rose-100 text-rose-700",
     border: "border-rose-200",
-    value: "text-rose-700",
+    value: "text-rose-800",
   },
 };
 
@@ -123,17 +123,17 @@ export function PlantDetail({
 
   return (
     <div className="space-y-6" id="top">
-      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <section className="overflow-hidden rounded-xl border border-emerald-100 bg-gradient-to-br from-white via-emerald-50/40 to-emerald-50 shadow">
         {defaultImageUrl ? (
-          <div className="relative h-64 w-full bg-slate-100">
+          <div className="relative h-64 w-full bg-emerald-100/50">
             <img src={defaultImageUrl} alt={plant.commonName} className="h-full w-full object-cover" loading="lazy" />
           </div>
         ) : null}
         <div className="space-y-4 p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-semibold">{plant.commonName}</h1>
-              <p className="text-sm text-slate-500">{plant.scientificName}</p>
+              <h1 className="text-2xl font-semibold text-slate-900">{plant.commonName}</h1>
+              <p className="text-sm text-emerald-700/80">{plant.scientificName}</p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <FocusToggle
@@ -154,7 +154,7 @@ export function PlantDetail({
             collections.length ? (
               <PlantActions plantId={plant.id} collections={collections} />
             ) : (
-              <div className="rounded border border-dashed border-slate-300 bg-slate-50 p-3 text-sm text-slate-600">
+              <div className="rounded border border-dashed border-emerald-200 bg-emerald-50/60 p-3 text-sm text-emerald-700">
                 You don&apos;t have any collections yet. Create one on the{" "}
                 <Link href="/plants/collection" className="font-semibold text-primary hover:underline">
                   collections page
@@ -165,8 +165,8 @@ export function PlantDetail({
           ) : null}
 
           {otherNames.length ? (
-            <div className="flex flex-wrap gap-2 text-xs text-slate-500">
-              <span className="font-semibold uppercase tracking-wide text-slate-600">Also known as</span>
+            <div className="flex flex-wrap gap-2 text-xs text-emerald-700/80">
+              <span className="font-semibold uppercase tracking-wide text-emerald-800">Also known as</span>
               {otherNames.map((name) => (
                 <Badge key={name} variant="outline">
                   {name}
@@ -175,8 +175,8 @@ export function PlantDetail({
             </div>
           ) : null}
 
-          {plant.description ? <p className="text-slate-600">{plant.description}</p> : null}
-          {plant.careNotes ? <p className="text-sm text-slate-500">{plant.careNotes}</p> : null}
+          {plant.description ? <p className="text-slate-700">{plant.description}</p> : null}
+          {plant.careNotes ? <p className="text-sm text-slate-600">{plant.careNotes}</p> : null}
         </div>
       </section>
 
@@ -194,7 +194,7 @@ export function PlantDetail({
 
 function QuickFactGrid({ facts }: { facts: QuickFact[] }) {
   return (
-    <section className="grid gap-3 md:grid-cols-3">
+    <section className="grid gap-4 md:grid-cols-3">
       {facts.map((fact) => (
         <QuickFactCard key={fact.title} {...fact} />
       ))}
@@ -205,7 +205,12 @@ function QuickFactGrid({ facts }: { facts: QuickFact[] }) {
 function QuickFactCard({ title, value, icon: Icon, tone = "default" }: QuickFact) {
   const toneStyles = factToneStyles[tone];
   return (
-    <div className={classNames("rounded-lg border bg-white p-4 shadow-sm", toneStyles.border)}>
+    <div
+      className={classNames(
+        "rounded-xl border bg-gradient-to-br from-white to-emerald-50/40 p-4 shadow-sm backdrop-blur",
+        toneStyles.border,
+      )}
+    >
       <div className="flex items-start gap-3">
         <span
           className={classNames(
@@ -216,8 +221,8 @@ function QuickFactCard({ title, value, icon: Icon, tone = "default" }: QuickFact
           <Icon className="h-5 w-5" aria-hidden />
         </span>
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</p>
-          <p className={classNames("mt-1 text-sm font-medium", toneStyles.value)}>{value}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800/80">{title}</p>
+          <p className={classNames("mt-1 text-sm font-semibold", toneStyles.value)}>{value}</p>
         </div>
       </div>
     </div>
@@ -233,11 +238,11 @@ type RelationCardProps = {
 
 function RelationCard({ title, relationships, empty, variant = "success" }: RelationCardProps) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <h3 className="text-sm font-semibold text-slate-500">{title}</h3>
+    <div className="rounded-xl border border-emerald-100 bg-white/95 p-4 shadow-sm backdrop-blur">
+      <h3 className="text-sm font-semibold text-emerald-800/90">{title}</h3>
       <div className="mt-3 space-y-3">
         {relationships.length === 0 ? (
-          <p className="text-sm text-slate-500">{empty}</p>
+          <p className="text-sm text-slate-600">{empty}</p>
         ) : (
           relationships.map((relationship) => (
             <div
@@ -249,7 +254,7 @@ function RelationCard({ title, relationships, empty, variant = "success" }: Rela
                   {relationship.targetPlant ? (
                     <Link
                       href={`/plants/${relationship.targetPlant.id}`}
-                      className="text-primary hover:underline"
+                      className="text-emerald-700 hover:text-emerald-600 hover:underline"
                     >
                       {relationship.targetPlant.commonName}
                     </Link>
@@ -258,7 +263,7 @@ function RelationCard({ title, relationships, empty, variant = "success" }: Rela
                   )}
                 </p>
                 {relationship.reason ? (
-                  <p className="text-xs text-slate-500">{relationship.reason}</p>
+                  <p className="text-xs text-slate-600">{relationship.reason}</p>
                 ) : null}
               </div>
               <Badge variant={variant}>{title}</Badge>
@@ -289,20 +294,23 @@ function AttributeGroups({ plant }: { plant: PlantWithRelations }) {
       {groups.map((group, index) => (
         <details
           key={group.title}
-          className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
+          className="overflow-hidden rounded-xl border border-emerald-100 bg-white/95 shadow-sm backdrop-blur"
           open={index < 2}
         >
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 bg-slate-50 px-4 py-3">
-            <span className="text-sm font-semibold text-slate-600">{group.title}</span>
-            <span className="text-xs text-slate-400">{group.items.length} fields</span>
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 bg-emerald-50/80 px-4 py-3 text-emerald-800">
+            <span className="text-sm font-semibold">{group.title}</span>
+            <span className="text-xs text-emerald-700/70">{group.items.length} fields</span>
           </summary>
           <div className="space-y-3 px-4 pb-4">
-            {group.description ? <p className="text-xs text-slate-500">{group.description}</p> : null}
+            {group.description ? <p className="text-xs text-slate-600">{group.description}</p> : null}
             <div className="grid gap-3 sm:grid-cols-2">
               {group.items.map((item) => (
-                <div key={`${group.title}-${item.label}`} className="rounded border border-slate-100 bg-white p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.label}</p>
-                  <div className="mt-1 text-sm text-slate-700">{renderAttribute(item)}</div>
+                <div
+                  key={`${group.title}-${item.label}`}
+                  className="rounded-lg border border-emerald-100/80 bg-emerald-50/40 p-3"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800/90">{item.label}</p>
+                  <div className="mt-1 text-sm font-medium text-slate-700">{renderAttribute(item)}</div>
                 </div>
               ))}
             </div>

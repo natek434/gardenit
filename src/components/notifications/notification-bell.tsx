@@ -157,14 +157,14 @@ export function NotificationBell() {
         ref={buttonRef}
         onClick={handleToggle}
         className={classNames(
-          "relative flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-primary/40 hover:text-primary",
-          { "text-primary": open },
+          "relative flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-emerald-900/60 text-emerald-100 transition hover:border-white/40 hover:bg-emerald-800/60",
+          { "bg-emerald-800/60 text-white": open },
         )}
         aria-label="Notifications"
       >
         <Bell className="h-4 w-4" aria-hidden="true" />
         {hasUnread ? (
-          <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-white">
+          <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-emerald-400 px-1 text-[10px] font-semibold text-emerald-950">
             {Math.min(unreadCount, 9)}
           </span>
         ) : null}
@@ -172,23 +172,23 @@ export function NotificationBell() {
       {open ? (
         <div
           ref={panelRef}
-          className="absolute right-0 z-30 mt-2 w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl"
+          className="absolute right-0 z-30 mt-2 w-80 overflow-hidden rounded-xl border border-emerald-100 bg-white/95 shadow-xl backdrop-blur"
         >
           <div className="flex items-center justify-between px-4 py-3">
             <p className="text-sm font-semibold text-slate-800">Notifications</p>
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-emerald-700/70">
               {loading ? "Loading…" : unreadCount === 0 ? "All caught up" : `${unreadCount} unread`}
             </span>
           </div>
           <div className="max-h-80 overflow-y-auto">
             {notifications.length ? (
-              <ul className="divide-y divide-slate-200">
+              <ul className="divide-y divide-emerald-100">
                 {notifications.map((notification) => (
                   <li key={notification.id}>
                     <button
                       type="button"
                       onClick={() => handleNavigate(notification)}
-                      className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-slate-50"
+                      className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-emerald-50/60"
                     >
                       <span
                         className={classNames(
@@ -199,22 +199,22 @@ export function NotificationBell() {
                       <div className="flex-1 space-y-1">
                         <p className="text-sm font-medium text-slate-800">{notification.title}</p>
                         {notification.ruleName ? (
-                          <p className="text-xs text-slate-500">{notification.ruleName}</p>
+                          <p className="text-xs text-emerald-700/70">{notification.ruleName}</p>
                         ) : null}
-                        <p className="line-clamp-2 text-xs text-slate-500">{notification.body}</p>
+                        <p className="line-clamp-2 text-xs text-slate-600">{notification.body}</p>
                       </div>
                       <div className="flex flex-col items-end gap-1">
-                        <span className="text-[10px] uppercase tracking-wide text-slate-400">
+                        <span className="text-[10px] uppercase tracking-wide text-emerald-700/70">
                           {channelLabel[notification.channel]}
                         </span>
-                        <span className="text-[10px] text-slate-400">{formatRelativeTime(notification.dueAt)}</span>
+                        <span className="text-[10px] text-emerald-700/70">{formatRelativeTime(notification.dueAt)}</span>
                       </div>
                     </button>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="px-4 py-6 text-center text-sm text-slate-500">
+              <p className="px-4 py-6 text-center text-sm text-emerald-700/80">
                 {loading ? "Loading notifications…" : "No recent notifications"}
               </p>
             )}
