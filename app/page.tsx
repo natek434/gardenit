@@ -14,7 +14,6 @@ import { auth } from "@/src/lib/auth/options";
 import { getPlants } from "@/src/server/plant-service";
 import { getUserProfile } from "@/src/server/user-service";
 import { getWeatherProvider } from "@/src/lib/weather/provider";
-import { PlantCard } from "@/src/components/plants/plant-card";
 import { Button } from "@/src/components/ui/button";
 import {
   DEFAULT_MEASUREMENT_PREFERENCES,
@@ -24,6 +23,7 @@ import {
   formatWindSpeed,
 } from "@/src/lib/units";
 import { getMeasurementPreferencesByUser } from "@/src/server/measurement-preference-service";
+import { getRecentNotifications } from "@/src/server/notification-service";
 
 export default async function HomePage() {
   const [plants, session] = await Promise.all([getPlants(), auth()]);
@@ -39,14 +39,16 @@ export default async function HomePage() {
   let soilTemp: number | null = null;
   let todayFrostRisk: "low" | "medium" | "high" = "low";
   let currentConditions: Awaited<ReturnType<typeof provider.getCurrentConditions>> | null = null;
-  let zone: string | null = null;
+  let notifications: Awaited<ReturnType<typeof getRecentNotifications>> = [];
 
   if (session?.user?.id) {
-    const [profile, measurementSnapshot] = await Promise.all([
+    const [profile, measurementSnapshot, notificationSnapshot] = await Promise.all([
       getUserProfile(session.user.id),
       getMeasurementPreferencesByUser(session.user.id),
+      getRecentNotifications(session.user.id, 25),
     ]);
 
+    notifications = notificationSnapshot;
     measurement = {
       temperatureUnit: measurementSnapshot.temperatureUnit,
       windSpeedUnit: measurementSnapshot.windSpeedUnit,
@@ -60,7 +62,6 @@ export default async function HomePage() {
       latitude = profile.locationLat;
       longitude = profile.locationLon;
       locationName = profile.locationName ?? "Custom coordinates";
-      zone = profile.climateZone?.name ?? locationName;
       try {
         [forecast, soilTemp, todayFrostRisk, currentConditions] = await Promise.all([
           provider.getForecast(profile.locationLat, profile.locationLon),
@@ -81,6 +82,7 @@ export default async function HomePage() {
   const formatWind = (value: number) => formatWindSpeed(value, measurement.windSpeedUnit);
   const formatPress = (value: number) => formatPressure(value, measurement.pressureUnit);
   const formatPrecip = (value: number) => formatPrecipitation(value, measurement.precipitationUnit);
+  const feedItems = buildNotificationFeed({ notifications, sowNow });
 
   return (
     <div className="space-y-10">
@@ -98,6 +100,8 @@ export default async function HomePage() {
           </Link>
         </div>
       </section>
+
+      <NotificationFeed items={feedItems} signedIn={Boolean(session?.user?.id)} />
 
       <section className={`rounded-xl border ${todayStyle.tone} bg-white p-6 shadow-sm`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -225,24 +229,6 @@ export default async function HomePage() {
       </section>
 
       <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Plant now in {zone}</h2>
-          <Link href="/plants" className="text-sm text-primary hover:underline">
-            View all plants
-          </Link>
-        </div>
-        {sowNow.length ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {sowNow.map((plant) => (
-              <PlantCard key={plant.id} plant={plant} />
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-slate-600">No immediate sowing opportunities. Check back soon!</p>
-        )}
-      </section>
-
-      <section className="space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-1">
             <h2 className="text-xl font-semibold">7-day forecast</h2>
@@ -360,4 +346,144 @@ function toCardinal(degrees: number) {
   const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
   const index = Math.round(((degrees % 360) / 45 + 8) % 8);
   return dirs[index];
+}
+
+type Severity = "info" | "warning" | "critical";
+
+type FeedItem = {
+  id: string;
+  title: string;
+  body: string;
+  severity: Severity;
+  dueAt: Date;
+  channelLabel: string;
+  emphasis?: string | null;
+  link?: { href: string; label: string };
+};
+
+type MinimalPlant = { id: string; commonName: string; status: { status: string } };
+
+function buildNotificationFeed({
+  notifications,
+  sowNow,
+}: {
+  notifications: Awaited<ReturnType<typeof getRecentNotifications>>;
+  sowNow: MinimalPlant[];
+}): FeedItem[] {
+  const severityRank: Record<Severity, number> = { critical: 3, warning: 2, info: 1 };
+  const channelLabels = { email: "Email", inapp: "In-app", push: "Push" } as const;
+
+  const items = notifications.map((notification) => {
+    const meta =
+      typeof notification.meta === "object" && notification.meta !== null
+        ? (notification.meta as Record<string, unknown>)
+        : {};
+    const emphasis = typeof meta.emphasis === "string" ? meta.emphasis : null;
+    const focusWeight = JSON.stringify(meta ?? {})
+      .toLowerCase()
+      .includes("focus")
+      ? 1
+      : 0;
+    return {
+      id: notification.id,
+      title: notification.title,
+      body: notification.body,
+      severity: notification.severity as Severity,
+      dueAt: notification.dueAt,
+      channelLabel: channelLabels[notification.channel],
+      emphasis,
+      focusWeight,
+      link: { href: "/notifications", label: "View details" },
+    };
+  });
+
+  if (sowNow.length) {
+    const topNames = sowNow.slice(0, 3).map((plant) => plant.commonName);
+    const remainder = sowNow.length - topNames.length;
+    const summary = remainder > 0 ? `${topNames.join(", ")} and ${remainder} more` : topNames.join(", ");
+    items.push({
+      id: "plant-now",
+      title: sowNow.length > 1 ? "Plant now opportunities" : `Plant now: ${sowNow[0].commonName}`,
+      body: `Ready to sow: ${summary}.`,
+      severity: "warning",
+      dueAt: new Date(),
+      channelLabel: "Garden insight",
+      emphasis: sowNow.length > 1 ? "Plant now" : `Plant now: ${sowNow[0].commonName}`,
+      link: { href: "/plants", label: "Explore plants" },
+      focusWeight: 0,
+    });
+  }
+
+  return items
+    .sort((a, b) => {
+      const severityDelta = severityRank[b.severity] - severityRank[a.severity];
+      if (severityDelta !== 0) return severityDelta;
+      if (b.focusWeight !== a.focusWeight) return b.focusWeight - a.focusWeight;
+      return b.dueAt.getTime() - a.dueAt.getTime();
+    })
+    .map(({ focusWeight, ...rest }) => rest)
+    .slice(0, 6);
+}
+
+function NotificationFeed({ items, signedIn }: { items: FeedItem[]; signedIn: boolean }) {
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold">Latest alerts</h2>
+        <Link href="/notifications" className="text-sm text-primary hover:underline">
+          View all notifications
+        </Link>
+      </div>
+      {items.length ? (
+        <ul className="space-y-3">
+          {items.map((item) => (
+            <li key={item.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <SeverityBadge severity={item.severity} />
+                    <span className="text-xs uppercase tracking-wide text-slate-400">{item.channelLabel}</span>
+                  </div>
+                  <h3 className="text-base font-semibold text-slate-800">{item.title}</h3>
+                  <p className="text-sm text-slate-600">{item.body}</p>
+                  <p className="text-xs text-slate-400">Logged {formatFeedTimestamp(item.dueAt)}</p>
+                  {item.emphasis ? <p className="text-xs text-slate-500">{item.emphasis}</p> : null}
+                </div>
+                {item.link ? (
+                  <Link href={item.link.href} className="text-sm font-semibold text-primary hover:underline">
+                    {item.link.label}
+                  </Link>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-slate-600">
+          {signedIn
+            ? "No notifications yet. We’ll surface urgent updates and focus escalations here."
+            : "Sign in to unlock personalised alerts. We’ll still highlight time-sensitive planting opportunities here."}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function SeverityBadge({ severity }: { severity: Severity }) {
+  const styles: Record<Severity, { tone: string; label: string }> = {
+    critical: { tone: "bg-red-100 text-red-700", label: "Urgent" },
+    warning: { tone: "bg-amber-100 text-amber-700", label: "Attention" },
+    info: { tone: "bg-blue-100 text-blue-700", label: "Info" },
+  };
+  const { tone, label } = styles[severity];
+  return <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${tone}`}>{label}</span>;
+}
+
+function formatFeedTimestamp(value: Date): string {
+  return value.toLocaleString("en-NZ", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }

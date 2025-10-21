@@ -97,6 +97,7 @@ model Plant {
   pruningCount            Json?
   seeds                   Int?
   attracts                String[]
+  diseases                String[] @default([])
   propagationMethods      String[]
   hardinessMin            String?
   hardinessMax            String?
@@ -141,8 +142,8 @@ model Plant {
   sowDepthMm              Int?
   spacingInRowCm          Int?
   spacingBetweenRowsCm    Int?
-  companions              Companion[] @relation("CompanionsA")
-  antagonists             Companion[] @relation("CompanionsB")
+  relationships           Companion[] @relation("CompanionSource")
+  relatedRelationships    Companion[] @relation("CompanionTarget")
   climateWindows          ClimatePlantWindow[]
   plantings               Planting[]
   collections             CollectionPlant[]
@@ -165,13 +166,14 @@ model ClimatePlantWindow {
 }
 
 model Companion {
-  id        String @id @default(cuid())
-  plantAId  String
-  plantBId  String
-  type      String
-  reason    String?
-  plantA    Plant  @relation("CompanionsA", fields: [plantAId], references: [id])
-  plantB    Plant  @relation("CompanionsB", fields: [plantBId], references: [id])
+  id            String  @id @default(cuid())
+  plantId       String
+  targetPlantId String?
+  targetName    String
+  type          String
+  reason        String?
+  plant         Plant   @relation("CompanionSource", fields: [plantId], references: [id])
+  targetPlant   Plant?  @relation("CompanionTarget", fields: [targetPlantId], references: [id])
 }
 
 model Garden {

@@ -38,7 +38,7 @@ const PlantInputSchema = z.object({
   scientificName: z.string().optional(),
   otherNames: z.array(z.string()).optional(),
   family: z.string().optional(),
-  origin: z.string().optional(),
+  origin: z.union([z.string(), z.array(z.string())]).optional(),
   plantType: z.string().optional(),
   category: z.enum(["vegetable", "herb", "fruit"]),
   cycle: z.string().optional(),
@@ -70,6 +70,7 @@ const PlantInputSchema = z.object({
   waterBenchmarkUnit: z.string().optional(),
   propagationMethods: z.array(z.string()).optional(),
   attracts: z.array(z.string()).optional(),
+  diseases: z.array(z.string()).optional(),
   pruningMonth: z.array(z.string()).optional(),
   seeds: z.number().int().optional(),
   climateWindows: z.array(ClimateWindowSchema).optional(),
@@ -94,7 +95,19 @@ async function loadFile(filePath: string) {
   return FileSchema.parse(json);
 }
 
-function toPlantPayload(input: z.infer<typeof PlantInputSchema>, imageLocalPath: string | null): Prisma.PlantUncheckedCreateInput {
+function normaliseOrigin(origin: z.infer<typeof PlantInputSchema>["origin"]): string | null {
+  if (!origin) return null;
+  if (Array.isArray(origin)) {
+    return origin.length ? origin.join(", ") : null;
+  }
+  const trimmed = origin.trim();
+  return trimmed ? trimmed : null;
+}
+
+function toPlantPayload(
+  input: z.infer<typeof PlantInputSchema>,
+  imageLocalPath: string | null,
+): Prisma.PlantUncheckedCreateInput {
   const wateringGeneralBenchmark = input.waterBenchmarkValue
     ? { value: input.waterBenchmarkValue, unit: input.waterBenchmarkUnit ?? null }
     : Prisma.JsonNull;
@@ -105,7 +118,7 @@ function toPlantPayload(input: z.infer<typeof PlantInputSchema>, imageLocalPath:
     scientificName: input.scientificName ?? null,
     otherNames: input.otherNames ?? [],
     family: input.family ?? null,
-    origin: input.origin ?? null,
+    origin: normaliseOrigin(input.origin),
     plantType: input.plantType ?? null,
     category: input.category,
     cycle: input.cycle ?? null,
@@ -121,6 +134,7 @@ function toPlantPayload(input: z.infer<typeof PlantInputSchema>, imageLocalPath:
     pruningCount: Prisma.JsonNull,
     seeds: input.seeds ?? null,
     attracts: input.attracts ?? [],
+    diseases: input.diseases ?? [],
     propagationMethods: input.propagationMethods ?? [],
     hardinessMin: null,
     hardinessMax: null,
