@@ -34,23 +34,15 @@ export function PlantDetail({
   const otherNames = plant.otherNames.filter(Boolean);
 
   const quickFacts: Array<{ title: string; value: string }> = [
-    { title: "Sunlight", value: formatList(plant.sunlightExposure, plant.sunRequirement) },
-    { title: "Watering", value: plant.watering ?? plant.waterGeneral },
-    { title: "Soil preferences", value: formatList(plant.soilPreferences, plant.soilNotes) },
-    {
-      title: "Hardiness",
-      value:
-        plant.hardinessMin || plant.hardinessMax
-          ? `Zones ${plant.hardinessMin ?? "?"}-${plant.hardinessMax ?? "?"}`
-          : "Not specified",
-    },
-    { title: "Propagation", value: formatList(plant.propagationMethods) },
-    { title: "Attracts", value: formatList(plant.attracts) },
+    { title: "Hardiness", value: formatHardiness(plant.hardinessMin, plant.hardinessMax) },
+    { title: "Days to maturity", value: plant.daysToMaturity ? `${plant.daysToMaturity} days` : "Not specified" },
     { title: "Growth rate", value: plant.growthRate ?? "Not specified" },
     { title: "Maintenance", value: plant.maintenanceLevel ?? plant.careLevel ?? "Not specified" },
+    { title: "Edible uses", value: formatEdibleParts(plant) },
     { title: "Medicinal", value: formatBoolean(plant.medicinal) },
-    { title: "Edible fruit", value: formatBoolean(plant.edibleFruit) },
-    { title: "Edible leaf", value: formatBoolean(plant.edibleLeaf) },
+    { title: "Culinary use", value: formatBoolean(plant.cuisine) },
+    { title: "Indoor friendly", value: formatBoolean(plant.indoor) },
+    { title: "Toxicity", value: formatToxicity(plant.poisonousToHumans, plant.poisonousToPets) },
   ];
 
   return (
@@ -112,7 +104,7 @@ export function PlantDetail({
       <section className="grid gap-4 md:grid-cols-3">
         <InfoCard title="Spacing" value={`${plant.spacingInRowCm ?? "--"}cm in-row`} helper={`Rows ${plant.spacingBetweenRowsCm ?? "--"}cm apart`} />
         <InfoCard title="Water" value={plant.waterGeneral} />
-        <InfoCard title="Days to maturity" value={plant.daysToMaturity ? `${plant.daysToMaturity} days` : "--"} />
+        <InfoCard title="Sunlight" value={plant.sunRequirement ?? formatList(plant.sunlightExposure)} />
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">
@@ -253,16 +245,11 @@ function buildAttributeGroups(plant: PlantWithRelations): AttributeGroup[] {
     {
       title: "Identity & classification",
       items: [
-        { label: "Perenual ID", value: plant.perenualId },
-        { label: "Common name", value: plant.commonName },
-        { label: "Scientific name", value: plant.scientificName },
-        { label: "Other names", value: plant.otherNames },
         { label: "Family", value: plant.family },
         { label: "Origin", value: plant.origin },
         { label: "Plant type", value: plant.plantType },
         { label: "Category", value: plant.category },
         { label: "Life cycle", value: plant.cycle },
-        { label: "Description", value: plant.description },
       ],
     },
     {
@@ -275,41 +262,49 @@ function buildAttributeGroups(plant: PlantWithRelations): AttributeGroup[] {
       ],
     },
     {
-      title: "Water & environment",
+      title: "Water & feeding",
       items: [
         { label: "Water guidance", value: plant.waterGeneral },
         { label: "Watering schedule", value: plant.watering },
-        { label: "Water benchmark", value: plant.wateringGeneralBenchmark },
+        {
+          label: "Water benchmark",
+          value: plant.wateringGeneralBenchmark,
+          render: () => renderWaterBenchmark(plant.wateringGeneralBenchmark),
+        },
         { label: "Water quality notes", value: plant.wateringQuality },
         { label: "Watering period", value: plant.wateringPeriod },
         { label: "Average volume", value: plant.wateringAvgVolume },
         { label: "Watering depth", value: plant.wateringDepth },
         { label: "Temperature-based watering", value: plant.wateringBasedTemperature },
         { label: "Water pH range", value: plant.wateringPhLevel },
-        { label: "Sunlight duration data", value: plant.sunlightDuration },
+        { label: "Sunlight duration guidance", value: plant.sunlightDuration },
       ],
     },
     {
       title: "Growth & care",
       items: [
-        { label: "Growth rate", value: plant.growthRate },
-        { label: "Maintenance level", value: plant.maintenanceLevel },
-        { label: "Care level", value: plant.careLevel },
         { label: "Care notes", value: plant.careNotes },
-        { label: "Days to maturity", value: plant.daysToMaturity },
         { label: "Sowing depth (mm)", value: plant.sowDepthMm },
         { label: "In-row spacing (cm)", value: plant.spacingInRowCm },
         { label: "Row spacing (cm)", value: plant.spacingBetweenRowsCm },
-        { label: "Seed count", value: plant.seeds },
+        { label: "Produces seeds", value: plant.seeds },
         { label: "Pruning months", value: plant.pruningMonth },
-        { label: "Pruning frequency", value: plant.pruningCount },
+        {
+          label: "Pruning frequency",
+          value: plant.pruningCount,
+          render: () => renderPruningCount(plant.pruningCount),
+        },
         {
           label: "Propagation methods",
           value: plant.propagationMethods,
           render: () => renderPropagationList(plant.propagationMethods),
         },
         { label: "Attracts", value: plant.attracts },
-        { label: "Plant anatomy", value: plant.plantAnatomy },
+        {
+          label: "Plant anatomy",
+          value: plant.plantAnatomy,
+          render: () => renderAnatomy(plant.plantAnatomy),
+        },
       ],
     },
     {
@@ -319,52 +314,22 @@ function buildAttributeGroups(plant: PlantWithRelations): AttributeGroup[] {
         { label: "Flowering season", value: plant.floweringSeason },
         { label: "Produces cones", value: plant.cones },
         { label: "Produces fruit", value: plant.fruits },
-        { label: "Edible fruit", value: plant.edibleFruit },
         { label: "Fruiting season", value: plant.fruitingSeason },
         { label: "Harvest season", value: plant.harvestSeason },
         { label: "Harvest method", value: plant.harvestMethod },
         { label: "Leafy", value: plant.leaf },
-        { label: "Edible leaf", value: plant.edibleLeaf },
       ],
     },
     {
-      title: "Resilience & usage",
+      title: "Resilience & habitat",
       items: [
-        { label: "Medicinal", value: plant.medicinal },
-        { label: "Poisonous to humans", value: plant.poisonousToHumans },
-        { label: "Poisonous to pets", value: plant.poisonousToPets },
         { label: "Drought tolerant", value: plant.droughtTolerant },
         { label: "Salt tolerant", value: plant.saltTolerant },
         { label: "Thorny", value: plant.thorny },
         { label: "Invasive", value: plant.invasive },
         { label: "Rare", value: plant.rare },
         { label: "Tropical", value: plant.tropical },
-        { label: "Used in cuisine", value: plant.cuisine },
-        { label: "Suitable indoors", value: plant.indoor },
         { label: "Diseases & pests", value: plant.diseases },
-      ],
-    },
-    {
-      title: "Hardiness & mapping",
-      items: [
-        { label: "Hardiness minimum", value: plant.hardinessMin },
-        { label: "Hardiness maximum", value: plant.hardinessMax },
-        { label: "Hardiness location data", value: plant.hardinessLocation },
-      ],
-    },
-    {
-      title: "Media assets",
-      items: [
-        { label: "Default image payload", value: plant.defaultImage },
-        { label: "Other images", value: plant.otherImages },
-        { label: "Stored image path", value: plant.imageLocalPath },
-      ],
-    },
-    {
-      title: "Record metadata",
-      items: [
-        { label: "Created at", value: plant.createdAt },
-        { label: "Updated at", value: plant.updatedAt },
       ],
     },
   ];
@@ -420,17 +385,28 @@ function renderValue(value: unknown): ReactNode {
     );
   }
   if (typeof value === "object") {
-    try {
-      return (
-        <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-slate-50 p-2 text-xs text-slate-600">
-          {JSON.stringify(value, null, 2)}
-        </pre>
-      );
-    } catch (error) {
-      return <span className="text-slate-400">Not specified</span>;
-    }
+    return renderObject(value as Record<string, unknown>);
   }
   return <span className="text-slate-400">Not specified</span>;
+}
+
+function renderObject(value: Record<string, unknown>): ReactNode {
+  const entries = Object.entries(value).filter(([_, entry]) =>
+    entry !== null && entry !== undefined && !(typeof entry === "string" && entry.trim() === "")
+  );
+  if (!entries.length) {
+    return <span className="text-slate-400">Not specified</span>;
+  }
+  return (
+    <div className="space-y-2">
+      {entries.map(([key, entry]) => (
+        <div key={key}>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{humanizeLabel(key)}</p>
+          <div className="text-sm text-slate-700">{renderValue(entry)}</div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function formatDate(value: Date): string {
@@ -468,7 +444,7 @@ function monthName(month: number) {
   return new Date(2000, month - 1, 1).toLocaleString("en-NZ", { month: "short" });
 }
 
-function formatList(values: string[], fallback?: string | null) {
+function formatList(values?: string[] | null, fallback?: string | null) {
   if (values?.length) {
     return values.join(", ");
   }
@@ -479,4 +455,116 @@ function formatList(values: string[], fallback?: string | null) {
 function formatBoolean(value?: boolean | null) {
   if (value === undefined || value === null) return "Not specified";
   return value ? "Yes" : "No";
+}
+
+function formatHardiness(min?: string | null, max?: string | null) {
+  if (!min && !max) {
+    return "Not specified";
+  }
+  if (min && max) {
+    return `Zones ${min}-${max}`;
+  }
+  if (min) {
+    return `Zones ${min}+`;
+  }
+  return `Up to zone ${max}`;
+}
+
+function formatEdibleParts(plant: PlantWithRelations) {
+  const parts: string[] = [];
+  if (plant.edibleFruit) parts.push("fruit");
+  if (plant.edibleLeaf) parts.push("leaf");
+  if (!parts.length) {
+    return "Not typically consumed";
+  }
+  if (parts.length === 2) {
+    return "Fruit and leaves";
+  }
+  return `${parts[0].charAt(0).toUpperCase()}${parts[0].slice(1)} only`;
+}
+
+function formatToxicity(poisonousToHumans?: boolean | null, poisonousToPets?: boolean | null) {
+  if (poisonousToHumans === undefined && poisonousToPets === undefined) {
+    return "Not specified";
+  }
+  if (poisonousToHumans && poisonousToPets) {
+    return "Toxic to humans and pets";
+  }
+  if (poisonousToHumans) {
+    return "Toxic to humans";
+  }
+  if (poisonousToPets) {
+    return "Toxic to pets";
+  }
+  if (poisonousToHumans === false && poisonousToPets === false) {
+    return "Safe for humans and pets";
+  }
+  if (poisonousToHumans === false) {
+    return "Safe for humans";
+  }
+  if (poisonousToPets === false) {
+    return "Safe for pets";
+  }
+  return "Not specified";
+}
+
+function renderWaterBenchmark(value: unknown): ReactNode {
+  if (!value || typeof value !== "object") {
+    return <span className="text-slate-400">Not specified</span>;
+  }
+  const { value: rawValue, unit } = value as { value?: unknown; unit?: unknown };
+  if (rawValue === null || rawValue === undefined || rawValue === "") {
+    return <span className="text-slate-400">Not specified</span>;
+  }
+  const cleanValue = typeof rawValue === "string" ? rawValue.replace(/^"|"$/g, "") : String(rawValue);
+  const cleanUnit = typeof unit === "string" && unit.trim() ? unit.trim() : "";
+  const suffix = cleanUnit ? ` ${cleanUnit}` : "";
+  return <span>{`Every ${cleanValue}${suffix}`}</span>;
+}
+
+function renderPruningCount(value: unknown): ReactNode {
+  if (!value || typeof value !== "object") {
+    return <span className="text-slate-400">Not specified</span>;
+  }
+  const { amount, interval } = value as { amount?: unknown; interval?: unknown };
+  if (amount === null || amount === undefined || interval === null || interval === undefined) {
+    return <span className="text-slate-400">Not specified</span>;
+  }
+  const cleanInterval = typeof interval === "string" ? interval : String(interval);
+  return <span>{`${amount} × ${cleanInterval}`}</span>;
+}
+
+function renderAnatomy(value: unknown): ReactNode {
+  if (!Array.isArray(value) || value.length === 0) {
+    return <span className="text-slate-400">Not specified</span>;
+  }
+  return (
+    <ul className="space-y-1">
+      {value.map((entry, index) => {
+        if (!entry || typeof entry !== "object") {
+          return (
+            <li key={index} className="text-sm text-slate-700">
+              {renderValue(entry)}
+            </li>
+          );
+        }
+        const { part, color } = entry as { part?: string; color?: string[] };
+        return (
+          <li key={part ?? index} className="text-sm text-slate-700">
+            <span className="font-medium">{part ?? "Part"}</span>
+            {color?.length ? <span className="text-slate-500"> — {color.join(", ")}</span> : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function humanizeLabel(label: string): string {
+  return label
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^./, (char) => char.toUpperCase());
 }
