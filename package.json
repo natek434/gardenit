@@ -18,6 +18,7 @@
     "perenual:import": "tsx scripts/perenual-import.ts",
     "perenual:sync": "tsx scripts/perenual-sync.ts",
     "plants:import": "tsx scripts/manual-plant-import.ts",
+    "plants:companions": "tsx scripts/sync-companions.ts",
     "climate:import": "tsx scripts/manual-climate-import.ts",
     "climate:backfill": "tsx scripts/backfill-climate-windows.ts"
   },

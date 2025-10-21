@@ -5,12 +5,13 @@ vi.mock("@/src/lib/prisma", () => ({
     companion: {
       findMany: vi.fn().mockResolvedValue([
         {
-          plantAId: "a",
-          plantBId: "b",
+          plantId: "a",
+          targetPlantId: "b",
+          targetName: "B",
           type: "companion",
           reason: "Test",
-          plantA: { id: "a", commonName: "A" },
-          plantB: { id: "b", commonName: "B" },
+          plant: { id: "a", commonName: "A" },
+          targetPlant: { id: "b", commonName: "B" },
         },
       ]),
     },
@@ -28,10 +29,10 @@ describe("getCompatibility", () => {
   it("fetches relationships for given ids", async () => {
     const result = await getCompatibility(["a", "b"]);
     expect(prismaMock.companion.findMany).toHaveBeenCalledWith({
-      where: { OR: [{ plantAId: { in: ["a", "b"] } }, { plantBId: { in: ["a", "b"] } }] },
+      where: { OR: [{ plantId: { in: ["a", "b"] } }, { targetPlantId: { in: ["a", "b"] } }] },
       include: {
-        plantA: { select: { id: true, commonName: true } },
-        plantB: { select: { id: true, commonName: true } },
+        plant: { select: { id: true, commonName: true } },
+        targetPlant: { select: { id: true, commonName: true } },
       },
     });
     expect(result).toHaveLength(1);
