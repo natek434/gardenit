@@ -226,6 +226,7 @@ export function toPlantPayload(
   const soilList = normaliseArray(detail.soil);
   const otherNames = normaliseArray(detail.other_name).map(toTitleCase);
   const attracts = normaliseArray(detail.attracts);
+  const diseases = normaliseArray(detail.pest_susceptibility).map(toTitleCase);
   const propagation = normaliseArray(detail.propagation);
   const pruningMonth = normaliseArray(detail.pruning_month);
   const wateringQuality = normaliseArray(detail.xWateringQuality);
@@ -253,6 +254,7 @@ export function toPlantPayload(
     pruningCount: detail.pruning_count ?? null,
     seeds: detail.seeds ?? null,
     attracts,
+    diseases,
     propagationMethods: propagation,
     hardinessMin: detail.hardiness?.min ?? null,
     hardinessMax: detail.hardiness?.max ?? null,

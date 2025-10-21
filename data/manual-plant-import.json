@@ -21,6 +21,11 @@
         "Division",
         "Layering Propagation"
       ],
+      "diseases": [
+        "Downy Mildew",
+        "Clubroot",
+        "White Rust"
+      ],
       "growthRate": "High",
       "maintenanceLevel": "Moderate",
       "medicinal": true,
@@ -53,6 +58,10 @@
       "waterBenchmarkValue": "3-4",
       "waterBenchmarkUnit": "days",
       "propagationMethods": ["Crown Division"],
+      "diseases": [
+        "Asparagus Rust",
+        "Fusarium Crown Rot"
+      ],
       "pruningMonth": ["March", "April", "May"],
       "edibleFruit": true,
       "growthRate": "High",
@@ -91,6 +100,11 @@
         "Cutting",
         "Layering Propagation",
         "Grafting Propagation"
+      ],
+      "diseases": [
+        "Bacterial Leaf Spot",
+        "Powdery Mildew",
+        "Verticillium Wilt"
       ],
       "edibleFruit": true,
       "edibleLeaf": true,
@@ -131,6 +145,11 @@
         "Division",
         "Layering Propagation",
         "Grafting Propagation"
+      ],
+      "diseases": [
+        "Clubroot",
+        "Downy Mildew",
+        "Black Rot"
       ],
       "edibleFruit": true,
       "edibleLeaf": true,
@@ -173,6 +192,11 @@
         "Division",
         "Grafting Propagation"
       ],
+      "diseases": [
+        "Clubroot",
+        "Downy Mildew",
+        "Alternaria Leaf Spot"
+      ],
       "pruningMonth": ["March", "April", "May"],
       "edibleFruit": true,
       "edibleLeaf": true,
@@ -213,6 +237,11 @@
         "Layering Propagation",
         "Division",
         "Grafting Propagation"
+      ],
+      "diseases": [
+        "Black Rot",
+        "Clubroot",
+        "Downy Mildew"
       ],
       "edibleFruit": false,
       "edibleLeaf": false,
@@ -255,6 +284,11 @@
         "Layering Propagation",
         "Cutting"
       ],
+      "diseases": [
+        "Alternaria Leaf Blight",
+        "Powdery Mildew",
+        "Root Rot"
+      ],
       "edibleFruit": false,
       "edibleLeaf": true,
       "growthRate": "High",
@@ -295,6 +329,11 @@
         "Cutting",
         "Layering Propagation"
       ],
+      "diseases": [
+        "Early Blight",
+        "Bacterial Blight",
+        "Septoria Leaf Spot"
+      ],
       "pruningMonth": ["March", "April", "May"],
       "edibleFruit": false,
       "edibleLeaf": true,
@@ -334,6 +373,11 @@
       "waterBenchmarkValue": "3-4",
       "waterBenchmarkUnit": "days",
       "propagationMethods": ["Seed Propagation"],
+      "diseases": [
+        "Powdery Mildew",
+        "Downy Mildew",
+        "Angular Leaf Spot"
+      ],
       "pruningMonth": [
         "March",
         "April",

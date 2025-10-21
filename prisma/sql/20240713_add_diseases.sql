@@ -1,0 +1,2 @@
+ALTER TABLE "Plant"
+ADD COLUMN IF NOT EXISTS "diseases" text[] NOT NULL DEFAULT '{}';

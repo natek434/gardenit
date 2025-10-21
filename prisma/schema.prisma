@@ -97,6 +97,7 @@ model Plant {
   pruningCount            Json?
   seeds                   Int?
   attracts                String[]
+  diseases                String[] @default([])
   propagationMethods      String[]
   hardinessMin            String?
   hardinessMax            String?

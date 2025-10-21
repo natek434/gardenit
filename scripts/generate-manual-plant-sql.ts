@@ -21,6 +21,7 @@ interface PlantInput {
   waterBenchmarkValue?: string;
   waterBenchmarkUnit?: string;
   propagationMethods?: string[];
+  diseases?: string[];
   growthRate?: string;
   maintenanceLevel?: string;
   medicinal?: boolean;
@@ -99,6 +100,7 @@ function buildInsert(plant: PlantInput): string {
     '"watering"',
     '"wateringGeneralBenchmark"',
     '"propagationMethods"',
+    '"diseases"',
     '"growthRate"',
     '"maintenanceLevel"',
     '"medicinal"',
@@ -136,6 +138,7 @@ function buildInsert(plant: PlantInput): string {
     escapeString(plant.watering ?? null),
     benchmarkJson(plant.waterBenchmarkValue, plant.waterBenchmarkUnit),
     arrayLiteral(plant.propagationMethods ?? []),
+    arrayLiteral(plant.diseases ?? []),
     escapeString(plant.growthRate ?? null),
     escapeString(plant.maintenanceLevel ?? null),
     booleanLiteral(plant.medicinal ?? null),
