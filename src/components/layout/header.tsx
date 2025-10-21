@@ -6,6 +6,7 @@ import { ReactNode } from "react";
 import classNames from "classnames";
 import { useSession, signOut } from "next-auth/react";
 import { Button } from "../ui/button";
+import { NotificationBell } from "@/src/components/notifications/notification-bell";
 
 export function Header(): ReactNode {
   const pathname = usePathname();
@@ -48,6 +49,7 @@ export function Header(): ReactNode {
               </Link>
             );
           })}
+          {session?.user ? <NotificationBell /> : null}
           {status === "loading" ? null : session?.user ? (
             <Button
               type="button"

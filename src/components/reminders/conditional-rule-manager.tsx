@@ -1051,6 +1051,12 @@ export function ConditionalRuleManager({ initialRules }: ConditionalRuleManagerP
   const [pendingTemplate, setPendingTemplate] = useState<string | null>(null);
   const [toggleRuleId, setToggleRuleId] = useState<string | null>(null);
   const [removeRuleId, setRemoveRuleId] = useState<string | null>(null);
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editSchedule, setEditSchedule] = useState("");
+  const [editThrottle, setEditThrottle] = useState("");
+  const [editParams, setEditParams] = useState("{}");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [customName, setCustomName] = useState("");
   const [customType, setCustomType] = useState<RuleType>("time");
   const [customSchedule, setCustomSchedule] = useState("");
@@ -1224,6 +1230,79 @@ export function ConditionalRuleManager({ initialRules }: ConditionalRuleManagerP
       });
     } finally {
       setRemoveRuleId(null);
+    }
+  };
+
+  const handleStartEdit = (rule: NotificationRuleSummary) => {
+    setEditingRuleId(rule.id);
+    setEditName(rule.name);
+    setEditSchedule(rule.schedule ?? "");
+    setEditThrottle(rule.throttleSecs ? String(rule.throttleSecs) : "");
+    setEditParams(JSON.stringify(rule.params ?? {}, null, 2));
+  };
+
+  const handleCancelEdit = () => {
+    setEditingRuleId(null);
+  };
+
+  const handleSaveEdit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editingRuleId) {
+      return;
+    }
+    const trimmedName = editName.trim();
+    if (!trimmedName) {
+      pushToast({
+        title: "Name required",
+        description: "Give your rule a descriptive name.",
+        variant: "error",
+      });
+      return;
+    }
+    let parsedParams: Record<string, unknown> = {};
+    try {
+      parsedParams = JSON.parse(editParams) as Record<string, unknown>;
+    } catch (error) {
+      pushToast({
+        title: "Invalid params",
+        description: "Enter valid JSON for params.",
+        variant: "error",
+      });
+      return;
+    }
+    const throttleValue = Number(editThrottle.trim());
+    const throttleSecs = Number.isFinite(throttleValue) && throttleValue > 0 ? throttleValue : undefined;
+    setIsSavingEdit(true);
+    try {
+      const response = await fetch(`/api/notification-rules/${editingRuleId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: trimmedName,
+          schedule: editSchedule.trim() || null,
+          throttleSecs,
+          params: parsedParams,
+        }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({ error: "Unable to update rule" }));
+        pushToast({
+          title: "Rule not updated",
+          description: typeof data.error === "string" ? data.error : "Unable to update rule",
+          variant: "error",
+        });
+        return;
+      }
+      const json = (await response.json()) as { rule: NotificationRuleSummary };
+      setRules((current) => current.map((rule) => (rule.id === json.rule.id ? serializeRule(json.rule) : rule)));
+      pushToast({
+        title: "Rule updated",
+        description: `${trimmedName} has been updated.`,
+        variant: "success",
+      });
+      setEditingRuleId(null);
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -1473,6 +1552,7 @@ export function ConditionalRuleManager({ initialRules }: ConditionalRuleManagerP
           ) : (
             rules.map((rule) => {
               const summary = describeRule(rule);
+              const isEditing = editingRuleId === rule.id;
               return (
                 <div key={rule.id} className="space-y-3 rounded border border-slate-200 bg-slate-50 p-4 shadow-sm">
                   <div className="flex items-center justify-between gap-3">
@@ -1480,49 +1560,104 @@ export function ConditionalRuleManager({ initialRules }: ConditionalRuleManagerP
                       <p className="text-sm font-semibold text-slate-800">{rule.name}</p>
                       <p className="text-[11px] uppercase tracking-wide text-slate-500">{rule.type}</p>
                     </div>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                      rule.isEnabled
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-slate-200 text-slate-600"
-                    }`}
-                  >
-                    {rule.isEnabled ? "Enabled" : "Paused"}
-                  </span>
-                </div>
-                {summary ? (
-                  <p className="text-xs text-slate-600">{summary}</p>
-                ) : null}
-                {rule.schedule ? (
-                  <p className="text-xs text-slate-500">Schedule: {rule.schedule}</p>
-                ) : null}
-                <details className="group">
-                  <summary className="flex cursor-pointer items-center gap-2 text-xs font-medium text-primary">
-                    View JSON
-                  </summary>
-                  <pre className="mt-2 max-h-48 overflow-auto rounded bg-slate-900/90 p-3 text-[11px] leading-tight text-slate-100">
-                    {JSON.stringify(rule.params ?? {}, null, 2)}
-                  </pre>
-                </details>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => handleToggleRule(rule)}
-                    disabled={toggleRuleId === rule.id}
-                  >
-                    {rule.isEnabled ? "Pause" : "Enable"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="text-red-500 hover:text-red-600"
-                    onClick={() => handleRemoveRule(rule)}
-                    disabled={removeRuleId === rule.id}
-                  >
-                    Remove
-                  </Button>
-                </div>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                        rule.isEnabled ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"
+                      }`}
+                    >
+                      {rule.isEnabled ? "Enabled" : "Paused"}
+                    </span>
+                  </div>
+                  {summary ? <p className="text-xs text-slate-600">{summary}</p> : null}
+                  {rule.schedule ? <p className="text-xs text-slate-500">Schedule: {rule.schedule}</p> : null}
+                  <details className="group">
+                    <summary className="flex cursor-pointer items-center gap-2 text-xs font-medium text-primary">
+                      View JSON
+                    </summary>
+                    <pre className="mt-2 max-h-48 overflow-auto rounded bg-slate-900/90 p-3 text-[11px] leading-tight text-slate-100">
+                      {JSON.stringify(rule.params ?? {}, null, 2)}
+                    </pre>
+                  </details>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => handleToggleRule(rule)}
+                      disabled={toggleRuleId === rule.id}
+                    >
+                      {rule.isEnabled ? "Pause" : "Enable"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => (isEditing ? handleCancelEdit() : handleStartEdit(rule))}
+                      disabled={removeRuleId === rule.id || toggleRuleId === rule.id}
+                    >
+                      {isEditing ? "Cancel edit" : "Edit"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="text-red-500 hover:text-red-600"
+                      onClick={() => handleRemoveRule(rule)}
+                      disabled={removeRuleId === rule.id || isEditing}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                  {isEditing ? (
+                    <form onSubmit={handleSaveEdit} className="space-y-3 rounded border border-slate-200 bg-white p-4">
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+                          Rule name
+                          <input
+                            type="text"
+                            value={editName}
+                            onChange={(event) => setEditName(event.target.value)}
+                            className="rounded border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+                          Schedule (RRULE)
+                          <input
+                            type="text"
+                            value={editSchedule}
+                            onChange={(event) => setEditSchedule(event.target.value)}
+                            placeholder="Leave blank to run on demand"
+                            className="rounded border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+                          Throttle seconds
+                          <input
+                            type="number"
+                            min={300}
+                            value={editThrottle}
+                            onChange={(event) => setEditThrottle(event.target.value)}
+                            placeholder="21600"
+                            className="rounded border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+                          />
+                        </label>
+                      </div>
+                      <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+                        Params (JSON)
+                        <textarea
+                          value={editParams}
+                          onChange={(event) => setEditParams(event.target.value)}
+                          rows={8}
+                          className="rounded border border-slate-300 px-3 py-2 font-mono text-xs focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        />
+                      </label>
+                      <div className="flex justify-end gap-2">
+                        <Button type="button" variant="ghost" onClick={handleCancelEdit} disabled={isSavingEdit}>
+                          Cancel
+                        </Button>
+                        <Button type="submit" disabled={isSavingEdit}>
+                          {isSavingEdit ? "Saving…" : "Save changes"}
+                        </Button>
+                      </div>
+                    </form>
+                  ) : null}
                 </div>
               );
             })
