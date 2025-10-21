@@ -745,7 +745,7 @@ async function evaluatePhenologyRule(
     user,
     rule,
     {
-      title: "Carrots nearing harvest window",
+      title: "Plants nearing harvest window",
       body: `Check ${nearing.map((planting) => planting.plant.commonName).join(", ")} for harvest readiness.`,
       severity: "info",
       channel: "email",
