@@ -26,9 +26,9 @@ type NotificationFeedProps = {
 };
 
 const severityPills: Record<Severity, string> = {
-  info: "bg-sky-100 text-sky-700 border-sky-200",
-  warning: "bg-amber-100 text-amber-700 border-amber-200",
-  critical: "bg-rose-100 text-rose-700 border-rose-200",
+  info: "bg-sky-100 text-sky-800 border-sky-200",
+  warning: "bg-amber-100 text-amber-800 border-amber-200",
+  critical: "bg-rose-100 text-rose-800 border-rose-200",
 };
 
 const channelLabels: Record<Channel, string> = {
@@ -256,27 +256,35 @@ export function NotificationFeed({ notifications, initialFocusId }: Notification
                 onClick={() => setChannel(candidate)}
                 disabled={!count}
                 className={classNames(
-                  "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium uppercase tracking-wide transition",
+                  "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition",
                   {
-                    "border-primary bg-primary text-white": channel === candidate && count,
-                    "border-slate-200 bg-white text-slate-600 hover:border-primary/60 hover:text-primary":
+                    "border-emerald-500 bg-emerald-500 text-white shadow": channel === candidate && count,
+                    "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100":
                       channel !== candidate && count,
-                    "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300": !count,
+                    "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400": !count,
                   },
                 )}
               >
                 <span>{channelLabels[candidate]}</span>
-                <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold">{count}</span>
+                <span
+                  className={classNames("rounded-full px-2 py-0.5 text-[10px] font-semibold", {
+                    "bg-white/15 text-white": channel === candidate && count,
+                    "bg-white text-emerald-700": channel !== candidate && count,
+                    "bg-slate-200 text-slate-500": !count,
+                  })}
+                >
+                  {count}
+                </span>
               </button>
             );
           })}
         </div>
-        <div className="flex items-center gap-2 text-xs font-medium text-primary">
+        <div className="flex items-center gap-2 text-xs font-medium text-emerald-700">
           <button
             type="button"
             onClick={handleMarkAllRead}
             disabled={!items.some((item) => !item.readAt) || isMarkingAllRead}
-            className="rounded border border-primary/40 px-3 py-1 text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
+            className="rounded border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
           >
             {isMarkingAllRead ? "Marking…" : "Mark all read"}
           </button>
@@ -284,25 +292,25 @@ export function NotificationFeed({ notifications, initialFocusId }: Notification
             type="button"
             onClick={handleClearAll}
             disabled={!items.length || isClearingAll}
-            className="rounded border border-red-200 px-3 py-1 text-red-500 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
+            className="rounded border border-rose-200 bg-rose-50 px-3 py-1 text-rose-600 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
           >
             {isClearingAll ? "Clearing…" : "Clear all"}
           </button>
         </div>
       </div>
       {filtered.length ? (
-        <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200">
+        <ul className="divide-y divide-emerald-100 rounded-xl border border-emerald-100 bg-white/95 shadow-sm">
           {filtered.map((notification) => {
             const isExpanded = expandedId === notification.id;
             const isUnread = !notification.readAt;
             return (
-              <li key={notification.id} className="bg-white">
+              <li key={notification.id} className="bg-transparent">
                 <button
                   type="button"
                   onClick={() => handleToggle(notification.id)}
                   className={classNames(
-                    "flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition hover:bg-slate-50",
-                    { "bg-slate-50": isExpanded },
+                    "flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition hover:bg-emerald-50/40",
+                    { "bg-emerald-50/70": isExpanded },
                   )}
                 >
                   <div className="flex flex-1 items-center gap-3">
@@ -326,7 +334,7 @@ export function NotificationFeed({ notifications, initialFocusId }: Notification
                             ? "Warning"
                             : "Critical"}
                         </span>
-                        <span className="rounded bg-slate-100 px-2 py-0.5 font-medium uppercase tracking-wide text-slate-500">
+                        <span className="rounded bg-emerald-100 px-2 py-0.5 font-medium uppercase tracking-wide text-emerald-700">
                           {channelLabels[notification.channel]}
                         </span>
                         {notification.ruleName ? (
@@ -341,35 +349,35 @@ export function NotificationFeed({ notifications, initialFocusId }: Notification
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    <time className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                    <time className="text-[11px] font-medium uppercase tracking-wide text-emerald-700/70">
                       {formatTimestamp(notification.dueAt)}
                     </time>
-                    <span className="text-[11px] text-slate-500">{isExpanded ? "Hide details" : "View details"}</span>
+                    <span className="text-[11px] text-emerald-700/80">{isExpanded ? "Hide details" : "View details"}</span>
                   </div>
                 </button>
                 {isExpanded ? (
-                  <div className="space-y-3 border-t border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                  <div className="space-y-3 border-t border-emerald-100 bg-emerald-50/50 px-4 py-3 text-sm text-slate-700">
                     <p className="whitespace-pre-line text-slate-700">{notification.body}</p>
                     {notification.meta && Object.keys(notification.meta).length ? (
                       <div className="space-y-2">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Additional context</p>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800/80">Additional context</p>
                         <dl className="space-y-2">
                           {Object.entries(notification.meta).map(([key, value]) => (
                             <div key={key} className="flex gap-2 text-sm">
-                              <dt className="w-32 shrink-0 text-slate-500">{humanizeKey(key)}</dt>
+                              <dt className="w-32 shrink-0 text-slate-600">{humanizeKey(key)}</dt>
                               <dd className="flex-1 text-slate-700">{describeMetaValue(value)}</dd>
                             </div>
                           ))}
                         </dl>
                       </div>
                     ) : null}
-                    <div className="flex items-center justify-between text-xs text-slate-500">
+                    <div className="flex items-center justify-between text-xs text-slate-600">
                       <span>Recorded {formatTimestamp(notification.dueAt)}</span>
                       <button
                         type="button"
                         onClick={() => handleClear(notification.id)}
                         disabled={clearingId === notification.id}
-                        className="rounded border border-red-200 px-3 py-1 text-red-500 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
+                        className="rounded border border-rose-200 bg-rose-50 px-3 py-1 text-rose-600 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
                       >
                         {clearingId === notification.id ? "Clearing…" : "Clear notification"}
                       </button>
@@ -381,7 +389,7 @@ export function NotificationFeed({ notifications, initialFocusId }: Notification
           })}
         </ul>
       ) : (
-        <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
+        <div className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50/50 p-6 text-center text-sm text-emerald-700">
           No {channelLabels[channel].toLowerCase()} notifications yet. Configure smart rules or wait for built-in alerts to run.
         </div>
       )}
