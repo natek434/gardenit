@@ -81,6 +81,14 @@ export function clearAllNotifications(userId: string) {
   });
 }
 
+export function getRecentNotifications(userId: string, take = 25) {
+  return prisma.notification.findMany({
+    where: { userId },
+    orderBy: { dueAt: "desc" },
+    take,
+  });
+}
+
 export async function recordNotification(
   userId: string,
   data: {

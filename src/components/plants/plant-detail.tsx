@@ -25,6 +25,40 @@ type PlantImage = {
   medium_url?: string;
   small_url?: string;
   thumbnail?: string;
+  // localPath is only present when we've cached it
+  localPath?: string;
+};
+
+type FactTone = "default" | "success" | "warning" | "danger";
+
+type QuickFact = {
+  title: string;
+  value: string;
+  icon: LucideIcon;
+  tone?: FactTone;
+};
+
+const factToneStyles: Record<FactTone, { icon: string; border: string; value: string }> = {
+  default: {
+    icon: "bg-slate-100 text-slate-600",
+    border: "border-slate-200",
+    value: "text-slate-700",
+  },
+  success: {
+    icon: "bg-emerald-100 text-emerald-700",
+    border: "border-emerald-200",
+    value: "text-emerald-700",
+  },
+  warning: {
+    icon: "bg-amber-100 text-amber-700",
+    border: "border-amber-200",
+    value: "text-amber-700",
+  },
+  danger: {
+    icon: "bg-rose-100 text-rose-700",
+    border: "border-rose-200",
+    value: "text-rose-700",
+  },
 };
 
 export function PlantDetail({
@@ -36,15 +70,15 @@ export function PlantDetail({
   collections?: Array<{ id: string; name: string }>;
   focusId?: string | null;
 }) {
-  const defaultImage = (plant.defaultImage as PlantImage | (PlantImage & { localPath?: string }) | null) ?? null;
+  const defaultImage = (plant.defaultImage as PlantImage | null) ?? null;
+
   const defaultImageUrl =
     plant.imageLocalPath ??
     defaultImage?.medium_url ??
     defaultImage?.regular_url ??
     defaultImage?.small_url ??
-    (defaultImage as { localPath?: string } | null)?.localPath ??
+    defaultImage?.localPath ??
     undefined;
-  const otherNames = plant.otherNames.filter(Boolean);
 
   const edibleInfo = deriveEdibleInfo(plant);
   const toxicityInfo = deriveToxicityInfo(plant.poisonousToHumans, plant.poisonousToPets);
@@ -93,12 +127,13 @@ export function PlantDetail({
                 label={plant.commonName}
               />
               <div className="flex flex-wrap gap-2">
-                <Badge variant="muted">{plant.category}</Badge>
+                {plant.category ? <Badge variant="muted">{plant.category}</Badge> : null}
                 {plant.cycle ? <Badge variant="muted">{plant.cycle}</Badge> : null}
                 {plant.careLevel ? <Badge variant="muted">Care: {plant.careLevel}</Badge> : null}
               </div>
             </div>
           </div>
+
           {collections ? (
             collections.length ? (
               <PlantActions plantId={plant.id} collections={collections} />
@@ -112,6 +147,7 @@ export function PlantDetail({
               </div>
             )
           ) : null}
+
           {otherNames.length ? (
             <div className="flex flex-wrap gap-2 text-xs text-slate-500">
               <span className="font-semibold uppercase tracking-wide text-slate-600">Also known as</span>
@@ -122,6 +158,7 @@ export function PlantDetail({
               ))}
             </div>
           ) : null}
+
           {plant.description ? <p className="text-slate-600">{plant.description}</p> : null}
           {plant.careNotes ? <p className="text-sm text-slate-500">{plant.careNotes}</p> : null}
         </div>
@@ -229,7 +266,7 @@ type RelationCardProps = {
   title: string;
   relationships: Array<{ targetName: string; targetPlant: { id: string; commonName: string } | null; reason: string | null }>;
   empty: string;
-  variant?: Parameters<typeof Badge>[0]["variant"];
+  variant?: React.ComponentProps<typeof Badge>["variant"];
 };
 
 function RelationCard({ title, relationships, empty, variant = "success" }: RelationCardProps) {
