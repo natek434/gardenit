@@ -11,6 +11,8 @@ import {
   ThermometerSun,
   Utensils,
   Wrench,
+  Droplet,
+  Sun
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { propagationSlug } from "@/src/lib/propagation";
@@ -25,6 +27,40 @@ type PlantImage = {
   medium_url?: string;
   small_url?: string;
   thumbnail?: string;
+  // localPath is only present when we've cached it
+  localPath?: string;
+};
+
+type FactTone = "default" | "success" | "warning" | "danger";
+
+type QuickFact = {
+  title: string;
+  value: string;
+  icon: LucideIcon;
+  tone?: FactTone;
+};
+
+const factToneStyles: Record<FactTone, { icon: string; border: string; value: string }> = {
+  default: {
+    icon: "bg-slate-100 text-slate-600",
+    border: "border-slate-200",
+    value: "text-slate-700",
+  },
+  success: {
+    icon: "bg-emerald-100 text-emerald-700",
+    border: "border-emerald-200",
+    value: "text-emerald-700",
+  },
+  warning: {
+    icon: "bg-amber-100 text-amber-700",
+    border: "border-amber-200",
+    value: "text-amber-700",
+  },
+  danger: {
+    icon: "bg-rose-100 text-rose-700",
+    border: "border-rose-200",
+    value: "text-rose-700",
+  },
 };
 
 export function PlantDetail({
@@ -36,15 +72,17 @@ export function PlantDetail({
   collections?: Array<{ id: string; name: string }>;
   focusId?: string | null;
 }) {
-  const defaultImage = (plant.defaultImage as PlantImage | (PlantImage & { localPath?: string }) | null) ?? null;
+  const defaultImage = (plant.defaultImage as PlantImage | null) ?? null;
+
   const defaultImageUrl =
     plant.imageLocalPath ??
     defaultImage?.medium_url ??
     defaultImage?.regular_url ??
     defaultImage?.small_url ??
-    (defaultImage as { localPath?: string } | null)?.localPath ??
+    defaultImage?.localPath ??
     undefined;
-  const otherNames = plant.otherNames.filter(Boolean);
+
+  const otherNames = (plant.otherNames ?? []).filter(Boolean) as string[];
 
   const edibleInfo = deriveEdibleInfo(plant);
   const toxicityInfo = deriveToxicityInfo(plant.poisonousToHumans, plant.poisonousToPets);
@@ -52,10 +90,13 @@ export function PlantDetail({
   const culinaryInfo = describeBoolean(plant.cuisine, "Popular in the kitchen", "Limited culinary use");
   const indoorInfo = describeBoolean(plant.indoor, "Happy indoors", "Prefers outdoor growing");
   const maintenanceSource = plant.maintenanceLevel ?? plant.careLevel ?? null;
-  const maintenanceValue = formatDescriptor(maintenanceSource);
+  const maintenanceValue = formatDescriptor(maintenanceSource ?? undefined);
   const maintenanceTone = deriveMaintenanceTone(maintenanceSource);
 
   const quickFacts: QuickFact[] = [
+    { title: "Spacing", value: `${plant.spacingInRowCm ?? "--"}cm in-row`, icon: Sprout},
+    { title: "Water", value: plant.waterGeneral ?? "Not specified", icon: Droplet },
+    { title: "Sunlight", value: plant.sunRequirement ?? "Not specified", icon: Sun },
     { title: "Hardiness", value: formatHardiness(plant.hardinessMin, plant.hardinessMax), icon: ThermometerSun },
     {
       title: "Days to maturity",
@@ -93,12 +134,13 @@ export function PlantDetail({
                 label={plant.commonName}
               />
               <div className="flex flex-wrap gap-2">
-                <Badge variant="muted">{plant.category}</Badge>
+                {plant.category ? <Badge variant="muted">{plant.category}</Badge> : null}
                 {plant.cycle ? <Badge variant="muted">{plant.cycle}</Badge> : null}
                 {plant.careLevel ? <Badge variant="muted">Care: {plant.careLevel}</Badge> : null}
               </div>
             </div>
           </div>
+
           {collections ? (
             collections.length ? (
               <PlantActions plantId={plant.id} collections={collections} />
@@ -112,6 +154,7 @@ export function PlantDetail({
               </div>
             )
           ) : null}
+
           {otherNames.length ? (
             <div className="flex flex-wrap gap-2 text-xs text-slate-500">
               <span className="font-semibold uppercase tracking-wide text-slate-600">Also known as</span>
@@ -122,26 +165,28 @@ export function PlantDetail({
               ))}
             </div>
           ) : null}
+
           {plant.description ? <p className="text-slate-600">{plant.description}</p> : null}
           {plant.careNotes ? <p className="text-sm text-slate-500">{plant.careNotes}</p> : null}
         </div>
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-3">
-        <InfoCard title="Spacing" value={`${plant.spacingInRowCm ?? "--"}cm in-row`} helper={`Rows ${plant.spacingBetweenRowsCm ?? "--"}cm apart`} />
-        <InfoCard title="Water" value={plant.waterGeneral} />
-        <InfoCard title="Sunlight" value={plant.sunRequirement ?? formatList(plant.sunlightExposure)} />
       </section>
 
       <QuickFactGrid facts={quickFacts} />
 
       <AttributeGroups plant={plant} />
 
-      <AttributeGroups plant={plant} />
-
       <section className="grid gap-4 md:grid-cols-2">
-        <RelationCard title="Companions" relationships={plant.companions} empty="No companions listed." />
-        <RelationCard title="Antagonists" relationships={plant.antagonists} variant="danger" empty="No antagonists listed." />
+        <RelationCard
+          title="Companions"
+          relationships={plant.companions ?? []}
+          empty="No companions listed."
+        />
+        <RelationCard
+          title="Antagonists"
+          relationships={plant.antagonists ?? []}
+          variant="destructive"
+          empty="No antagonists listed."
+        />
       </section>
     </div>
   );
@@ -162,38 +207,6 @@ function InfoCard({ title, value, helper }: InfoCardProps) {
     </div>
   );
 }
-
-type FactTone = "default" | "success" | "warning" | "danger";
-
-type QuickFact = {
-  title: string;
-  value: string;
-  icon: LucideIcon;
-  tone?: FactTone;
-};
-
-const factToneStyles: Record<FactTone, { icon: string; border: string; value: string }> = {
-  default: {
-    icon: "bg-slate-100 text-slate-600",
-    border: "border-slate-200",
-    value: "text-slate-700",
-  },
-  success: {
-    icon: "bg-emerald-100 text-emerald-700",
-    border: "border-emerald-200",
-    value: "text-emerald-700",
-  },
-  warning: {
-    icon: "bg-amber-100 text-amber-700",
-    border: "border-amber-200",
-    value: "text-amber-700",
-  },
-  danger: {
-    icon: "bg-rose-100 text-rose-700",
-    border: "border-rose-200",
-    value: "text-rose-700",
-  },
-};
 
 function QuickFactGrid({ facts }: { facts: QuickFact[] }) {
   return (
@@ -229,9 +242,13 @@ function QuickFactCard({ title, value, icon: Icon, tone = "default" }: QuickFact
 
 type RelationCardProps = {
   title: string;
-  relationships: Array<{ targetName: string; targetPlant: { id: string; commonName: string } | null; reason: string | null }>;
+  relationships: Array<{
+    targetName: string;
+    targetPlant: { id: string; commonName: string } | null;
+    reason: string | null;
+  }>;
   empty: string;
-  variant?: Parameters<typeof Badge>[0]["variant"];
+  variant?: React.ComponentProps<typeof Badge>["variant"];
 };
 
 function RelationCard({ title, relationships, empty, variant = "success" }: RelationCardProps) {
@@ -250,10 +267,7 @@ function RelationCard({ title, relationships, empty, variant = "success" }: Rela
               <div>
                 <p className="font-medium text-slate-700">
                   {relationship.targetPlant ? (
-                    <Link
-                      href={`/plants/${relationship.targetPlant.id}`}
-                      className="text-primary hover:underline"
-                    >
+                    <Link href={`/plants/${relationship.targetPlant.id}`} className="text-primary hover:underline">
                       {relationship.targetPlant.commonName}
                     </Link>
                   ) : (
@@ -317,9 +331,7 @@ function AttributeGroups({ plant }: { plant: PlantWithRelations }) {
 }
 
 function renderAttribute(item: AttributeItem): ReactNode {
-  if (item.render) {
-    return item.render();
-  }
+  if (item.render) return item.render();
   return renderValue(item.value);
 }
 
@@ -370,7 +382,7 @@ function buildAttributeGroups(plant: PlantWithRelations): AttributeGroup[] {
         {
           label: "Planting windows",
           value: plant.climateWindows,
-          render: () => renderPlantingWindows(plant.climateWindows),
+          render: () => renderPlantingWindows(plant.climateWindows ?? []),
         },
         { label: "Sowing depth (mm)", value: plant.sowDepthMm },
         { label: "In-row spacing (cm)", value: plant.spacingInRowCm },
@@ -385,7 +397,7 @@ function buildAttributeGroups(plant: PlantWithRelations): AttributeGroup[] {
         {
           label: "Propagation methods",
           value: plant.propagationMethods,
-          render: () => renderPropagationList(plant.propagationMethods),
+          render: () => renderPropagationList(plant.propagationMethods ?? []),
         },
         { label: "Attracts", value: plant.attracts },
         {
@@ -479,8 +491,8 @@ function renderValue(value: unknown): ReactNode {
 }
 
 function renderObject(value: Record<string, unknown>): ReactNode {
-  const entries = Object.entries(value).filter(([_, entry]) =>
-    entry !== null && entry !== undefined && !(typeof entry === "string" && entry.trim() === "")
+  const entries = Object.entries(value).filter(
+    ([, entry]) => entry !== null && entry !== undefined && !(typeof entry === "string" && entry.trim() === ""),
   );
   if (!entries.length) {
     return <span className="text-slate-400">Not specified</span>;
@@ -512,23 +524,15 @@ function monthName(month: number) {
 }
 
 function formatList(values?: string[] | null, fallback?: string | null) {
-  if (values?.length) {
-    return values.join(", ");
-  }
+  if (values?.length) return values.join(", ");
   if (fallback) return fallback;
   return "Not specified";
 }
 
 function formatHardiness(min?: string | null, max?: string | null) {
-  if (!min && !max) {
-    return "Not specified";
-  }
-  if (min && max) {
-    return `Zones ${min}-${max}`;
-  }
-  if (min) {
-    return `Zones ${min}+`;
-  }
+  if (!min && !max) return "Not specified";
+  if (min && max) return `Zones ${min}-${max}`;
+  if (min) return `Zones ${min}+`;
   return `Up to zone ${max}`;
 }
 
@@ -606,25 +610,18 @@ function formatDescriptor(value?: string | null): string {
 function deriveMaintenanceTone(source: string | null): FactTone {
   if (!source) return "default";
   const normalized = source.toLowerCase();
-  if (/(low|easy|minimal)/.test(normalized)) {
-    return "success";
-  }
-  if (/(high|difficult|intensive|heavy)/.test(normalized)) {
-    return "warning";
-  }
+  if (/(low|easy|minimal)/.test(normalized)) return "success";
+  if (/(high|difficult|intensive|heavy)/.test(normalized)) return "warning";
   return "default";
 }
 
-function describeBoolean(value: boolean | null | undefined, positive: string, negative: string): {
-  label: string;
-  tone: FactTone;
-} {
-  if (value === true) {
-    return { label: positive, tone: "success" };
-  }
-  if (value === false) {
-    return { label: negative, tone: "default" };
-  }
+function describeBoolean(
+  value: boolean | null | undefined,
+  positive: string,
+  negative: string,
+): { label: string; tone: FactTone } {
+  if (value === true) return { label: positive, tone: "success" };
+  if (value === false) return { label: negative, tone: "default" };
   return { label: "Not specified", tone: "default" };
 }
 
@@ -634,19 +631,10 @@ function deriveEdibleInfo(plant: PlantWithRelations): { label: string; tone: Fac
   const parts: string[] = [];
   if (plant.edibleFruit) parts.push("fruit");
   if (plant.edibleLeaf) parts.push("leaves");
-  if (!known) {
-    return { label: "Not specified", tone: "default" };
-  }
-  if (!parts.length) {
-    return { label: "Not typically consumed", tone: "warning" };
-  }
-  if (parts.length === 2) {
-    return { label: "Fruit and leaves are edible", tone: "success" };
-  }
-  return {
-    label: parts[0] === "fruit" ? "Harvest the fruit" : "Harvest the leaves",
-    tone: "success",
-  };
+  if (!known) return { label: "Not specified", tone: "default" };
+  if (!parts.length) return { label: "Not typically consumed", tone: "warning" };
+  if (parts.length === 2) return { label: "Fruit and leaves are edible", tone: "success" };
+  return { label: parts[0] === "fruit" ? "Harvest the fruit" : "Harvest the leaves", tone: "success" };
 }
 
 function deriveToxicityInfo(
@@ -655,31 +643,19 @@ function deriveToxicityInfo(
 ): { label: string; tone: FactTone } {
   const humanKnown = poisonousToHumans !== null && poisonousToHumans !== undefined;
   const petKnown = poisonousToPets !== null && poisonousToPets !== undefined;
-  if (!humanKnown && !petKnown) {
-    return { label: "Not specified", tone: "default" };
-  }
-  if (poisonousToHumans && poisonousToPets) {
-    return { label: "Toxic to humans and pets", tone: "danger" };
-  }
-  if (poisonousToHumans) {
-    return { label: "Toxic to humans", tone: "danger" };
-  }
-  if (poisonousToPets) {
-    return { label: "Toxic to pets", tone: "danger" };
-  }
-  if (poisonousToHumans === false && poisonousToPets === false) {
-    return { label: "Safe for humans and pets", tone: "success" };
-  }
-  if (poisonousToHumans === false && !petKnown) {
-    return { label: "Safe for humans", tone: "success" };
-  }
-  if (poisonousToPets === false && !humanKnown) {
-    return { label: "Safe for pets", tone: "success" };
-  }
+  if (!humanKnown && !petKnown) return { label: "Not specified", tone: "default" };
+  if (poisonousToHumans && poisonousToPets) return { label: "Toxic to humans and pets", tone: "danger" };
+  if (poisonousToHumans) return { label: "Toxic to humans", tone: "danger" };
+  if (poisonousToPets) return { label: "Toxic to pets", tone: "danger" };
+  if (poisonousToHumans === false && poisonousToPets === false) return { label: "Safe for humans and pets", tone: "success" };
+  if (poisonousToHumans === false && !petKnown) return { label: "Safe for humans", tone: "success" };
+  if (poisonousToPets === false && !humanKnown) return { label: "Safe for pets", tone: "success" };
   return { label: "Safety data incomplete", tone: "warning" };
 }
 
-function renderPlantingWindows(windows: PlantWithRelations["climateWindows"]): ReactNode {
+function renderPlantingWindows(
+  windows: NonNullable<PlantWithRelations["climateWindows"]>,
+): ReactNode {
   if (!windows.length) {
     return <span className="text-slate-400">Not specified</span>;
   }
@@ -697,10 +673,7 @@ function renderPlantingWindows(windows: PlantWithRelations["climateWindows"]): R
 
         if (!segments.length) {
           return (
-            <div
-              key={key}
-              className="rounded border border-slate-100 bg-slate-50 p-2 text-sm text-slate-500"
-            >
+            <div key={key} className="rounded border border-slate-100 bg-slate-50 p-2 text-sm text-slate-500">
               {window.climateZoneId ? `No timing data for ${window.climateZoneId}` : "No timing data recorded"}
             </div>
           );
@@ -724,9 +697,7 @@ function renderPlantingWindows(windows: PlantWithRelations["climateWindows"]): R
 }
 
 function formatRangeSet(range: unknown): string | null {
-  if (!Array.isArray(range)) {
-    return null;
-  }
+  if (!Array.isArray(range)) return null;
   const segments = range
     .map((entry) => {
       if (!entry || typeof entry !== "object") return null;
@@ -735,120 +706,6 @@ function formatRangeSet(range: unknown): string | null {
       return `${monthName(start)}-${monthName(end)}`;
     })
     .filter((value): value is string => Boolean(value));
-  if (!segments.length) {
-    return null;
-  }
+  if (!segments.length) return null;
   return segments.join(", ");
-}
-
-function formatHardiness(min?: string | null, max?: string | null) {
-  if (!min && !max) {
-    return "Not specified";
-  }
-  if (min && max) {
-    return `Zones ${min}-${max}`;
-  }
-  if (min) {
-    return `Zones ${min}+`;
-  }
-  return `Up to zone ${max}`;
-}
-
-function formatEdibleParts(plant: PlantWithRelations) {
-  const parts: string[] = [];
-  if (plant.edibleFruit) parts.push("fruit");
-  if (plant.edibleLeaf) parts.push("leaf");
-  if (!parts.length) {
-    return "Not typically consumed";
-  }
-  if (parts.length === 2) {
-    return "Fruit and leaves";
-  }
-  return `${parts[0].charAt(0).toUpperCase()}${parts[0].slice(1)} only`;
-}
-
-function formatToxicity(poisonousToHumans?: boolean | null, poisonousToPets?: boolean | null) {
-  if (poisonousToHumans === undefined && poisonousToPets === undefined) {
-    return "Not specified";
-  }
-  if (poisonousToHumans && poisonousToPets) {
-    return "Toxic to humans and pets";
-  }
-  if (poisonousToHumans) {
-    return "Toxic to humans";
-  }
-  if (poisonousToPets) {
-    return "Toxic to pets";
-  }
-  if (poisonousToHumans === false && poisonousToPets === false) {
-    return "Safe for humans and pets";
-  }
-  if (poisonousToHumans === false) {
-    return "Safe for humans";
-  }
-  if (poisonousToPets === false) {
-    return "Safe for pets";
-  }
-  return "Not specified";
-}
-
-function renderWaterBenchmark(value: unknown): ReactNode {
-  if (!value || typeof value !== "object") {
-    return <span className="text-slate-400">Not specified</span>;
-  }
-  const { value: rawValue, unit } = value as { value?: unknown; unit?: unknown };
-  if (rawValue === null || rawValue === undefined || rawValue === "") {
-    return <span className="text-slate-400">Not specified</span>;
-  }
-  const cleanValue = typeof rawValue === "string" ? rawValue.replace(/^"|"$/g, "") : String(rawValue);
-  const cleanUnit = typeof unit === "string" && unit.trim() ? unit.trim() : "";
-  const suffix = cleanUnit ? ` ${cleanUnit}` : "";
-  return <span>{`Every ${cleanValue}${suffix}`}</span>;
-}
-
-function renderPruningCount(value: unknown): ReactNode {
-  if (!value || typeof value !== "object") {
-    return <span className="text-slate-400">Not specified</span>;
-  }
-  const { amount, interval } = value as { amount?: unknown; interval?: unknown };
-  if (amount === null || amount === undefined || interval === null || interval === undefined) {
-    return <span className="text-slate-400">Not specified</span>;
-  }
-  const cleanInterval = typeof interval === "string" ? interval : String(interval);
-  return <span>{`${amount} × ${cleanInterval}`}</span>;
-}
-
-function renderAnatomy(value: unknown): ReactNode {
-  if (!Array.isArray(value) || value.length === 0) {
-    return <span className="text-slate-400">Not specified</span>;
-  }
-  return (
-    <ul className="space-y-1">
-      {value.map((entry, index) => {
-        if (!entry || typeof entry !== "object") {
-          return (
-            <li key={index} className="text-sm text-slate-700">
-              {renderValue(entry)}
-            </li>
-          );
-        }
-        const { part, color } = entry as { part?: string; color?: string[] };
-        return (
-          <li key={part ?? index} className="text-sm text-slate-700">
-            <span className="font-medium">{part ?? "Part"}</span>
-            {color?.length ? <span className="text-slate-500"> — {color.join(", ")}</span> : null}
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-function humanizeLabel(label: string): string {
-  return label
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/[_-]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/^./, (char) => char.toUpperCase());
 }
