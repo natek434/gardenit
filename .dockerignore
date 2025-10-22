@@ -1,0 +1,11 @@
+node_modules
+.next
+.git
+.gitignore
+npm-debug.log
+.env
+.env.*
+*.local
+coverage
+playwright-report
+.DS_Store
