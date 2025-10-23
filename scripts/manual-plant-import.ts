@@ -38,7 +38,7 @@ const PlantInputSchema = z.object({
   scientificName: z.string().optional(),
   otherNames: z.array(z.string()).optional(),
   family: z.string().optional(),
-  origin: z.union([z.string(), z.array(z.string())]).optional(),
+  origin: z.array(z.string()).optional(),
   plantType: z.string().optional(),
   category: z.enum(["vegetable", "herb", "fruit"]),
   cycle: z.string().optional(),
@@ -72,7 +72,7 @@ const PlantInputSchema = z.object({
   attracts: z.array(z.string()).optional(),
   diseases: z.array(z.string()).optional(),
   pruningMonth: z.array(z.string()).optional(),
-  seeds: z.number().int().optional(),
+  seeds: z.boolean().optional(),
   climateWindows: z.array(ClimateWindowSchema).optional(),
   image: ImageInputSchema.optional(),
 });
@@ -95,15 +95,6 @@ async function loadFile(filePath: string) {
   return FileSchema.parse(json);
 }
 
-function normaliseOrigin(origin: z.infer<typeof PlantInputSchema>["origin"]): string | null {
-  if (!origin) return null;
-  if (Array.isArray(origin)) {
-    return origin.length ? origin.join(", ") : null;
-  }
-  const trimmed = origin.trim();
-  return trimmed ? trimmed : null;
-}
-
 function toPlantPayload(
   input: z.infer<typeof PlantInputSchema>,
   imageLocalPath: string | null,
@@ -118,7 +109,7 @@ function toPlantPayload(
     scientificName: input.scientificName ?? null,
     otherNames: input.otherNames ?? [],
     family: input.family ?? null,
-    origin: normaliseOrigin(input.origin),
+    origin: input.origin ?? [],
     plantType: input.plantType ?? null,
     category: input.category,
     cycle: input.cycle ?? null,
@@ -132,7 +123,7 @@ function toPlantPayload(
     plantAnatomy: Prisma.JsonNull,
     pruningMonth: input.pruningMonth ?? [],
     pruningCount: Prisma.JsonNull,
-    seeds: input.seeds ?? null,
+    seeds: null,
     attracts: input.attracts ?? [],
     diseases: input.diseases ?? [],
     propagationMethods: input.propagationMethods ?? [],

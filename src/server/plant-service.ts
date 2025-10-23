@@ -187,7 +187,7 @@ export type PlantAdminUpdateInput = {
     origin: string | null;
     plantType: string | null;
     category: string;
-    cycle: string | null;
+    cycle: string[];
     sunRequirement: string;
     sunlightExposure: string[];
     soilNotes: string | null;
@@ -198,7 +198,7 @@ export type PlantAdminUpdateInput = {
     plantAnatomy: Prisma.InputJsonValue | typeof Prisma.JsonNull;
     pruningMonth: string[];
     pruningCount: Prisma.InputJsonValue | typeof Prisma.JsonNull;
-    seeds: number | null;
+    seeds: boolean | null;
     attracts: string[];
     propagationMethods: string[];
     hardinessMin: string | null;

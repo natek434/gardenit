@@ -81,7 +81,7 @@ model Plant {
   scientificName          String?
   otherNames              String[]
   family                  String?
-  origin                  String?
+  origin                  String[]
   plantType               String?
   category                String
   cycle                   String?
@@ -95,7 +95,7 @@ model Plant {
   plantAnatomy            Json?
   pruningMonth            String[]
   pruningCount            Json?
-  seeds                   Int?
+  seeds                   Boolean?
   attracts                String[]
   diseases                String[] @default([])
   propagationMethods      String[]
